@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <!-- Favicon — Dhaka Kacchi Berlin -->
+    <link rel="icon" type="image/x-icon" href="../favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="../images/favicons/favicon-32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../images/favicons/favicon-16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="../images/favicons/apple-touch-icon.png">
+    <meta name="theme-color" content="#07070A">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Subscribe — Dhaka Kacchi Berlin</title>
+    <meta name="description"
+          content="Subscribe to Dhaka Kacchi for exclusive offers, Eid specials, and batch announcements." />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+            href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,600&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;1,9..40,300&display=swap"
+            rel="stylesheet">
+    <link rel="stylesheet" href="../css/style.css" />
+    <style>
+        .sub-hero {
+          min-height: 100vh;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+          padding: 140px 56px 100px;
+          background: var(--black);
+          position: relative;
+          overflow: hidden;
+        }
+
+        .sub-hero::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: radial-gradient(ellipse at center 40%, rgba(200, 169, 110, 0.06) 0%, transparent 65%);
+          pointer-events: none;
+        }
+
+        .sub-rings {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          pointer-events: none;
+          z-index: 0;
+        }
+
+        .sub-rings .ring {
+          border: 1px solid rgba(200, 169, 110, 0.08);
+          border-radius: 50%;
+          position: absolute;
+          transform: translate(-50%, -50%);
+          animation: rp 8s ease-in-out infinite;
+        }
+
+        .sub-rings .ring:nth-child(1) {
+          width: 400px;
+          height: 400px;
+        }
+
+        .sub-rings .ring:nth-child(2) {
+          width: 700px;
+          height: 700px;
+          animation-delay: 1.5s;
+        }
+
+        .sub-rings .ring:nth-child(3) {
+          width: 1000px;
+          height: 1000px;
+          animation-delay: 3s;
+        }
+
+        @keyframes rp {
+
+          0%,
+          100% {
+            opacity: .3
+          }
+
+          50% {
+            opacity: .7
+          }
+        }
+
+        .sub-hero-inner {
+          position: relative;
+          z-index: 2;
+          max-width: 680px;
+          width: 100%;
+        }
+
+        .sub-icon {
+          font-size: 3.5rem;
+          margin-bottom: 32px;
+          display: block;
+          animation: float 4s ease-in-out infinite;
+        }
+
+        @keyframes float {
+
+          0%,
+          100% {
+            transform: translateY(0);
+          }
+
+          50% {
+            transform: translateY(-10px);
+          }
+        }
+
+        .sub-hero h1 {
+          font-family: var(--dk);
+          font-size: clamp(2.8rem, 6vw, 5rem);
+          font-weight: 300;
+          color: var(--cream);
+          line-height: 1.05;
+          margin-bottom: 12px;
+        }
+
+        .sub-hero h1 em {
+          font-style: italic;
+          color: var(--gold);
+        }
+
+        .sub-hl {
+          width: 50px;
+          height: 1px;
+          background: var(--gold);
+          margin: 28px auto;
+        }
+
+        .sub-desc {
+          font-family: var(--dm);
+          font-size: .96rem;
+          line-height: 1.95;
+          color: var(--muted);
+          margin-bottom: 48px;
+          max-width: 520px;
+          margin-left: auto;
+          margin-right: auto;
+        }
+
+        /* ---- FORM ---- */
+        .sub-form-full {
+          display: flex;
+          flex-direction: column;
+          gap: 0;
+          max-width: 520px;
+          margin: 0 auto;
+        }
+
+        .sub-form-full input[type="text"],
+        .sub-form-full input[type="email"],
+        .sub-form-full input[type="tel"] {
+          width: 100%;
+          padding: 18px 24px;
+          background: rgba(200, 169, 110, .05);
+          border: 1px solid var(--line);
+          border-bottom: none;
+          color: var(--cream);
+          font-family: var(--dm);
+          font-size: .9rem;
+          outline: none;
+          transition: border-color .3s, background .3s;
+          -webkit-appearance: none;
+        }
+
+        .sub-form-full input[type="email"] {
+          border-bottom: none;
+        }
+
+        .sub-form-full input[type="tel"] {
+          border-bottom: 1px solid var(--line);
+          -webkit-appearance: none;
+          appearance: none;
+        }
+
+        .sub-form-full input:focus {
+          background: rgba(200, 169, 110, .08);
+          border-color: rgba(200, 169, 110, .45);
+        }
+
+        .sub-form-full input::placeholder {
+          color: var(--muted);
+        }
+
+        .sub-submit-btn {
+          background: var(--gold);
+          border: none;
+          color: var(--black);
+          padding: 20px 36px;
+          font-family: var(--dm);
+          font-size: .75rem;
+          letter-spacing: 3px;
+          text-transform: uppercase;
+          cursor: pointer;
+          font-weight: 400;
+          margin-top: 12px;
+          position: relative;
+          overflow: hidden;
+          transition: transform .2s, box-shadow .3s;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 12px;
+          width: 100%;
+        }
+
+        .sub-submit-btn::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: var(--gold2);
+          transform: translateX(-100%);
+          transition: transform .4s;
+        }
+
+        .sub-submit-btn:hover:not(:disabled)::before {
+          transform: translateX(0);
+        }
+
+        .sub-submit-btn span {
+          position: relative;
+          z-index: 1;
+        }
+
+        .sub-submit-btn:hover:not(:disabled) {
+          transform: translateY(-2px);
+          box-shadow: 0 20px 60px rgba(200, 169, 110, .3);
+        }
+
+        .sub-submit-btn:disabled {
+          opacity: .7;
+          cursor: not-allowed;
+        }
+
+        /* Spinner */
+        .spinner {
+          display: none;
+          width: 16px;
+          height: 16px;
+          border: 2px solid rgba(7, 7, 10, .3);
+          border-top-color: var(--black);
+          border-radius: 50%;
+          animation: spin .7s linear infinite;
+          position: relative;
+          z-index: 1;
+          flex-shrink: 0;
+        }
+
+        @keyframes spin {
+          to {
+            transform: rotate(360deg);
+          }
+        }
+
+        /* Error message */
+        .sub-error {
+          display: none;
+          margin-top: 14px;
+          font-family: var(--dm);
+          font-size: .8rem;
+          color: #e07070;
+          text-align: center;
+          line-height: 1.7;
+        }
+
+        /* ---- SUCCESS STATE ---- */
+        .sub-success-full {
+          display: none;
+          margin-top: 8px;
+          animation: fadeUp .6s ease forwards;
+        }
+
+        @keyframes fadeUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+
+          to {
+            opacity: 1;
+            transform: none;
+          }
+        }
+
+        .sub-success-full .snum {
+          font-size: 3rem;
+          display: block;
+          margin-bottom: 16px;
+        }
+
+        .sub-success-full .stitle {
+          font-family: var(--dk);
+          font-size: 2rem;
+          font-style: italic;
+          color: var(--gold);
+          display: block;
+          margin-bottom: 12px;
+        }
+
+        .sub-success-full .sdesc {
+          font-family: var(--dm);
+          font-size: .9rem;
+          color: var(--muted);
+          line-height: 1.85;
+        }
+
+        /* ---- PERKS ---- */
+        .sub-perks {
+          display: flex;
+          justify-content: center;
+          gap: 28px;
+          flex-wrap: wrap;
+          margin-top: 36px;
+        }
+
+        .sub-perk {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-family: var(--dm);
+          font-size: .67rem;
+          letter-spacing: 2px;
+          text-transform: uppercase;
+          color: var(--muted);
+        }
+
+        .sub-perk-icon {
+          color: var(--gold);
+        }
+
+        @media(max-width:700px) {
+          .sub-hero {
+            padding: 130px 24px 80px;
+          }
+
+          .sub-perks {
+            gap: 14px;
+          }
+        }
+    </style>
+</head>
+
+<body>
+
+<!-- Nav injected by nav.js -->
+
+<section class="sub-hero">
+    <div class="sub-rings">
+        <div class="ring"></div>
+        <div class="ring"></div>
+        <div class="ring"></div>
+    </div>
+
+    <div class="sub-hero-inner">
+        <span class="sub-icon">✉️</span>
+        <h1>Join the<br><em>Kacchi Circle</em></h1>
+        <div class="sub-hl"></div>
+        <p class="sub-desc">Get exclusive offers, Eid specials, new batch announcements, event packages, and food stories
+            — straight to your inbox. Subscribers always get first access.</p>
+
+        <!-- SUBSCRIBE FORM -->
+        <form class="sub-form-full" id="subForm" novalidate>
+            <input type="text" id="subName" name="name" placeholder="Your name *" autocomplete="given-name" maxlength="80"
+                   required />
+            <input type="email" id="subEmail" name="email" placeholder="Your email address *" required autocomplete="email"
+                   maxlength="120" />
+            <input type="tel" id="subWhatsapp" name="whatsapp" placeholder="WhatsApp number (e.g. +49 123 456789)"
+                   autocomplete="tel" maxlength="30" />
+            <button type="submit" class="sub-submit-btn" id="subBtn">
+                <span id="subBtnText">Subscribe — It's Free →</span>
+                <div class="spinner" id="subSpinner"></div>
+            </button>
+            <div class="sub-error" id="subError"></div>
+        </form>
+
+        <!-- SUCCESS STATE (shown after submit) -->
+        <div class="sub-success-full" id="subSuccess">
+            <span class="snum">🎉</span>
+            <span class="stitle">You're in the Kacchi Circle!</span>
+            <p class="sdesc">
+                Welcome aboard! A welcome email is on its way to your inbox.<br>
+                You'll be the first to know about every batch, special, and update.
+            </p>
+        </div>
+
+        <div class="sub-perks">
+            <div class="sub-perk"><span class="sub-perk-icon">🎁</span> Exclusive offers</div>
+            <div class="sub-perk"><span class="sub-perk-icon">🌙</span> Eid specials</div>
+            <div class="sub-perk"><span class="sub-perk-icon">📖</span> Food stories</div>
+            <div class="sub-perk"><span class="sub-perk-icon">🚫</span> No spam, ever</div>
+        </div>
+    </div>
+</section>
+
+<script src="../js/nav.js"></script>
+<script>
+    var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyG8JH7fP5LguM5RuXUwvsz7PR4cP2o1Y6JeJQV9zSn5ewDxzTy15YkRZa-N6Mm_kCf_g/exec';
+
+    var form = document.getElementById('subForm');
+    var btn = document.getElementById('subBtn');
+    var btnText = document.getElementById('subBtnText');
+    var spinner = document.getElementById('subSpinner');
+    var errBox = document.getElementById('subError');
+    var success = document.getElementById('subSuccess');
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+
+      var name = document.getElementById('subName').value.trim();
+      var email = document.getElementById('subEmail').value.trim();
+      var whatsapp = document.getElementById('subWhatsapp').value.trim();
+
+      if (!name) { showError('Please enter your name.'); return; }
+      if (!email || email.indexOf('@') === -1) { showError('Please enter a valid email address.'); return; }
+
+      setLoading(true);
+      hideError();
+
+      // Build GET URL with params
+      var url = SCRIPT_URL
+        + '?name=' + encodeURIComponent(name)
+        + '&email=' + encodeURIComponent(email)
+        + '&whatsapp=' + encodeURIComponent(whatsapp);
+
+      // Use no-cors fetch — we can't read the response but the request goes through
+      fetch(url, { method: 'GET', mode: 'no-cors' })
+        .then(function () {
+          // no-cors means we never see the response — assume success after 1s
+          setTimeout(showSuccess, 1000);
+        })
+        .catch(function () {
+          // Network totally failed — try iframe fallback
+          iframeFallback(url);
+        });
+    });
+
+    function iframeFallback(url) {
+      var iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      document.body.appendChild(iframe);
+      setTimeout(showSuccess, 3000); // show success after 3s regardless
+      iframe.src = url;
+    }
+
+    function showSuccess() {
+      form.style.display = 'none';
+      success.style.display = 'block';
+      setLoading(false);
+    }
+    function setLoading(on) {
+      btn.disabled = on;
+      btnText.style.display = on ? 'none' : 'inline';
+      spinner.style.display = on ? 'block' : 'none';
+    }
+    function showError(msg) {
+      errBox.textContent = msg;
+      errBox.style.display = 'block';
+      setLoading(false);
+    }
+    function hideError() {
+      errBox.style.display = 'none';
+    }
+</script>
+</body>
+
+</html>

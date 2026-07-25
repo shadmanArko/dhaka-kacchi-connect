@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Favicon — Dhaka Kacchi Berlin -->
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="images/favicons/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="images/favicons/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="images/favicons/apple-touch-icon.png">
+  <meta name="theme-color" content="#07070A">
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dhaka Kacchi Berlin — Authentic Kacchi Biriyani & Borhani</title>
+  <meta name="description" content="Berlin's only authentic Kacchi Biriyani and Borhani — prepared by a Bangladeshi doctor with generations of family tradition."/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,600&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;1,9..40,300&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css"/>
+  <style>
+    /* ---- HERO ---- */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      align-items: stretch;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero-left {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 140px 64px 80px;
+      position: relative;
+      z-index: 2;
+      background: linear-gradient(105deg, #07070A 0%, #0f0c06 100%);
+    }
+    .hero-right {
+      width: 48%;
+      position: relative;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    /* Real kacchi photo in hero */
+    .hero-food-img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center 30%;
+      animation: imgZoom 12s ease-in-out infinite alternate;
+    }
+    .hero-right::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, #07070A 0%, transparent 40%),
+                  linear-gradient(0deg, rgba(7,7,10,.4) 0%, transparent 50%);
+      z-index: 1;
+    }
+    @keyframes imgZoom { from { transform: scale(1); } to { transform: scale(1.06); } }
+
+    .hero-location {
+      font-family: var(--dm);
+      font-size: .68rem;
+      letter-spacing: 5px;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 28px;
+      opacity: 0;
+      animation: fu 1s ease-out .3s forwards;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .hero-h1 {
+      font-family: var(--dk);
+      font-size: clamp(3rem, 6vw, 5.5rem);
+      font-weight: 300;
+      line-height: 1.02;
+      color: var(--cream);
+      margin-bottom: 12px;
+      opacity: 0;
+      animation: fu 1s ease-out .5s forwards;
+    }
+    .hero-h1 em { font-style: italic; color: var(--gold); }
+    .hero-hl {
+      width: 50px; height: 1px;
+      background: var(--gold);
+      margin: 28px 0;
+      opacity: 0;
+      animation: fu 1s ease-out .7s forwards;
+    }
+    .hero-desc {
+      font-size: .96rem;
+      line-height: 1.95;
+      color: var(--muted);
+      max-width: 440px;
+      margin-bottom: 48px;
+      opacity: 0;
+      animation: fu 1s ease-out .9s forwards;
+    }
+    .hero-btns {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      opacity: 0;
+      animation: fu 1s ease-out 1.1s forwards;
+    }
+    .hero-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 14px;
+      background: var(--gold);
+      color: var(--black);
+      padding: 18px 48px;
+      font-family: var(--dm);
+      font-size: .78rem;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      text-decoration: none;
+      font-weight: 400;
+      transition: all .35s;
+    }
+    .hero-btn:hover { background: var(--gold2); transform: translateY(-2px); box-shadow: 0 20px 60px rgba(200,169,110,.3); }
+    .hero-btn-ghost {
+      display: inline-flex;
+      align-items: center;
+      gap: 14px;
+      background: transparent;
+      border: 1px solid rgba(200,169,110,0.35);
+      color: var(--cream);
+      padding: 18px 36px;
+      font-family: var(--dm);
+      font-size: .78rem;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      text-decoration: none;
+      font-weight: 300;
+      transition: all .35s;
+    }
+    .hero-btn-ghost:hover { border-color: var(--gold); color: var(--gold); transform: translateY(-2px); }
+
+    /* Decorative rings */
+    .hero-rings { position: absolute; bottom: -100px; right: -100px; pointer-events: none; }
+    .ring { border: 1px solid var(--line); border-radius: 50%; position: absolute; transform: translate(-50%,-50%); animation: rp 6s ease-in-out infinite; }
+    .ring:nth-child(1) { width:240px; height:240px; }
+    .ring:nth-child(2) { width:400px; height:400px; animation-delay:.8s; }
+    .ring:nth-child(3) { width:560px; height:560px; animation-delay:1.6s; }
+    @keyframes rp { 0%,100%{opacity:.4} 50%{opacity:.9} }
+    @keyframes fu  { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
+
+    /* ---- BERLIN BANNER ---- */
+    .berlin-banner {
+      background: var(--deep);
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      padding: 28px 56px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 40px;
+      flex-wrap: wrap;
+    }
+    .berlin-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--dm);
+      font-size: .68rem;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .berlin-item .bi-icon { color: var(--gold); }
+    .berlin-div { color: var(--line); font-size: 1rem; }
+
+    /* ---- PRODUCTS SECTION ---- */
+    .products-section {
+      padding: 130px 56px;
+      background: var(--black);
+      border-top: 1px solid var(--line);
+    }
+    .products-head {
+      text-align: center;
+      max-width: 700px;
+      margin: 0 auto 72px;
+    }
+    .products-grid {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+      border: 1px solid var(--line);
+    }
+    .product-card {
+      position: relative;
+      background: var(--surface);
+      padding: 0;
+      overflow: hidden;
+      transition: background .4s;
+      opacity: 0;
+      transform: translateY(28px);
+      transition: opacity .65s, transform .65s, background .4s;
+      display: flex;
+      flex-direction: column;
+    }
+    .product-card + .product-card { border-left: 1px solid var(--line); }
+    .product-card.vis { opacity: 1; transform: none; }
+    .product-card:hover { background: rgba(200,169,110,.03); }
+    .product-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0;
+      width: 0; height: 3px;
+      background: var(--gold);
+      transition: width .5s;
+      z-index: 2;
+    }
+    .product-card:hover::before { width: 100%; }
+
+    /* Product photo */
+    .product-photo {
+      width: 100%;
+      aspect-ratio: 16/10;
+      object-fit: cover;
+      display: block;
+      /* 
+        TO CHANGE KACCHI PHOTO: replace images/kacchi.jpg
+        TO CHANGE BORHANI PHOTO: replace images/borhani-3-web.jpg
+      */
+    }
+    .product-photo-placeholder {
+      width: 100%;
+      aspect-ratio: 16/10;
+      background: linear-gradient(135deg, #0d0b08 0%, #161208 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 5rem;
+    }
+    .product-body { padding: 40px 44px 48px; flex: 1; }
+    .product-number {
+      position: absolute;
+      top: 16px; right: 20px;
+      font-family: var(--dk);
+      font-size: 3rem;
+      font-weight: 300;
+      color: rgba(200,169,110,0.12);
+      line-height: 1;
+      z-index: 1;
+    }
+    .product-label {
+      font-family: var(--dm);
+      font-size: .62rem;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: var(--gold3);
+      margin-bottom: 10px;
+      display: block;
+    }
+    .product-name {
+      font-family: var(--dk);
+      font-size: clamp(1.8rem, 3vw, 2.6rem);
+      font-weight: 300;
+      color: var(--cream);
+      line-height: 1.1;
+      margin-bottom: 4px;
+    }
+    .product-name em { color: var(--gold); font-style: italic; }
+    .product-subtitle {
+      font-family: var(--dk);
+      font-size: 1rem;
+      font-style: italic;
+      color: var(--muted);
+      margin-bottom: 20px;
+      display: block;
+    }
+    .product-desc {
+      font-family: var(--dm);
+      font-size: .88rem;
+      line-height: 1.9;
+      color: var(--muted);
+      margin-bottom: 28px;
+    }
+    .product-tags { display: flex; flex-wrap: wrap; gap: 7px; }
+    .product-tag {
+      font-family: var(--dm);
+      font-size: .6rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--gold);
+      border: 1px solid var(--line);
+      padding: 5px 11px;
+    }
+
+    @media(max-width:1024px) {
+      .hero { flex-direction: column; min-height: auto; }
+      .hero-left { padding: 120px 32px 60px; }
+      .hero-right { width: 100%; height: 55vw; min-height: 300px; }
+      .products-section { padding: 80px 28px; }
+      .products-grid { grid-template-columns: 1fr; }
+      .product-card + .product-card { border-left: none; border-top: 1px solid var(--line); }
+      .product-body { padding: 32px 28px 40px; }
+      .berlin-banner { padding: 20px 28px; gap: 18px; }
+    }
+    @media(max-width:480px) {
+      .hero-btns { flex-direction: column; }
+      .hero-btn, .hero-btn-ghost { justify-content: center; text-align: center; }
+      .berlin-banner { gap: 12px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ============================================================
+    Nav injected automatically by js/nav.js
+    TO CHANGE LOGO: edit js/nav.js → logoSrc variable
+    ============================================================ -->
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-left">
+      <div class="hero-rings">
+        <div class="ring"></div><div class="ring"></div><div class="ring"></div>
+      </div>
+      <span class="hero-location"><span class="bi-icon">📍</span> Berlin, Germany · Authentic Since Day One</span>
+      <h1 class="hero-h1">The Kacchi<br><em>Berlin Deserves</em></h1>
+      <div class="hero-hl"></div>
+      <p class="hero-desc">Not a fusion. Not an imitation. The real thing — slow-cooked, sealed in dum, fragrant with saffron and generations of tradition. Prepared by a Bangladeshi doctor who couldn't find it in Berlin, so she made it herself.</p>
+      <div class="hero-btns">
+        <a class="hero-btn" href="pages/order.html"><span>Order Now</span><span>→</span></a>
+        <a class="hero-btn-ghost" href="pages/about.html"><span>Our Story</span></a>
+      </div>
+    </div>
+    <div class="hero-right">
+      <!--
+        TO CHANGE HERO PHOTO: replace images/kacchi.jpg with your new image
+        Keep the same filename or update the src attribute below
+      -->
+      <img class="hero-food-img" src="images/kacchi.jpg" alt="Dhaka Kacchi Biriyani Berlin — authentic slow-cooked kacchi" loading="eager">
+    </div>
+  </section>
+
+  <!-- BERLIN BANNER -->
+  <div class="berlin-banner">
+    <div class="berlin-item"><span class="bi-icon">📍</span><span>Berlin, Germany</span></div>
+    <span class="berlin-div">·</span>
+    <div class="berlin-item"><span class="bi-icon">✓</span><span>100% Halal & Fresh</span></div>
+    <span class="berlin-div">·</span>
+    <div class="berlin-item"><span class="bi-icon">🕰️</span><span>48h Advance Order</span></div>
+    <span class="berlin-div">·</span>
+    <div class="berlin-item"><span class="bi-icon">🫕</span><span>Made to Order</span></div>
+  </div>
+
+  <!-- ============================================================
+    PRODUCTS
+    TO CHANGE KACCHI PHOTO:   replace images/kacchi.jpg
+    TO CHANGE BORHANI PHOTO:  replace images/borhani-3-web.jpg
+    ============================================================ -->
+  <section class="products-section">
+    <div class="products-head reveal">
+      <span class="sec-eye">What We Serve in Berlin</span>
+      <h2 class="sec-title">Two dishes.<br><em>Both legendary.</em></h2>
+    </div>
+    <div class="products-grid">
+
+      <!-- KACCHI BIRIYANI -->
+      <div class="product-card reveal">
+        <span class="product-number">01</span>
+        <img class="product-photo"
+             src="images/kacchi.jpg"
+             alt="Kacchi Biriyani — Berlin's authentic slow-cooked mutton biriyani"
+             loading="lazy">
+        <div class="product-body">
+          <span class="product-label">Signature Dish</span>
+          <h3 class="product-name">Kacchi <em>Biriyani</em></h3>
+          <span class="product-subtitle">dum-sealed · slow-cooked · old Dhaka recipe</span>
+          <p class="product-desc">Raw marinated mutton and long-grain basmati, layered and sealed in a dum pot for 6+ hours. Every grain absorbs the saffron, kewra, and generations of spice knowledge. Includes the signature dum potato — a Dhaka trademark no other city gets right.</p>
+          <div class="product-tags">
+            <span class="product-tag">Young Mutton</span>
+            <span class="product-tag">Overnight Marinade</span>
+            <span class="product-tag">Saffron & Kewra</span>
+            <span class="product-tag">Dum Potato</span>
+            <span class="product-tag">6+ Hours</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- BORHANI -->
+      <div class="product-card reveal">
+        <span class="product-number">02</span>
+        <!--
+          TO CHANGE BORHANI PHOTO: replace images/borhani-3-web.jpg
+          Alternative photos available: borhani-1-web.jpg, borhani-2-web.jpg
+        -->
+        <img class="product-photo"
+             src="images/borhani-3-web.jpg"
+             alt="Borhani — traditional Bangladeshi spiced yoghurt drink"
+             loading="lazy">
+        <div class="product-body">
+          <span class="product-label">The Perfect Companion</span>
+          <h3 class="product-name"><em>Borhani</em></h3>
+          <span class="product-subtitle">spiced yoghurt drink · the kacchi companion</span>
+          <p class="product-desc">No kacchi meal in Bangladesh is complete without Borhani. Chilled, spiced yoghurt blended with black salt, mint, coriander, and green chilli — it cuts through the richness of the biriyani perfectly. Ours is made from scratch, the traditional way. Cooling, complex, unlike anything from a bottle.</p>
+          <div class="product-tags">
+            <span class="product-tag">Spiced Yoghurt</span>
+            <span class="product-tag">Black Salt</span>
+            <span class="product-tag">Fresh Mint</span>
+            <span class="product-tag">Coriander</span>
+            <span class="product-tag">Served Chilled</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- WHY US -->
+  <section class="grid-section">
+    <div class="grid-head reveal">
+      <span class="sec-eye">Why Dhaka Kacchi Berlin</span>
+      <h2 class="sec-title">Cooked the <em>Old Way.</em><br>Served in Berlin.</h2>
+    </div>
+    <div class="grid6">
+      <div class="card">
+        <div class="card-accent"></div>
+        <span class="cnum">01 —</span><span class="cico">🔬</span>
+        <h3>Doctor's Precision</h3>
+        <p>Prepared by a trained physician. The same exactness applied to medicine applies here — hygiene, precision, and standards most kitchens in Berlin can't match.</p>
+      </div>
+      <div class="card">
+        <div class="card-accent"></div>
+        <span class="cnum">02 —</span><span class="cico">📍</span>
+        <h3>Berlin's Only Real Kacchi</h3>
+        <p>We searched too. You won't find authentic kacchi anywhere else in Berlin. Not fusion, not compromise — the genuine article, prepared as it is in Dhaka's finest kitchens.</p>
+      </div>
+      <div class="card">
+        <div class="card-accent"></div>
+        <span class="cnum">03 —</span><span class="cico">🌿</span>
+        <h3>Authentic Spices</h3>
+        <p>Hand-ground spice blends following a generations-old family recipe. No shortcuts, no packets — each batch is blended fresh, in-house, before every preparation.</p>
+      </div>
+      <div class="card">
+        <div class="card-accent"></div>
+        <span class="cnum">04 —</span><span class="cico">🥩</span>
+        <h3>Premium Halal Mutton</h3>
+        <p>Only fresh, young mutton. Sourced with care, marinated overnight in yoghurt and raw papaya — the traditional Dhaka tenderiser that makes all the difference.</p>
+      </div>
+      <div class="card">
+        <div class="card-accent"></div>
+        <span class="cnum">05 —</span><span class="cico">❤️</span>
+        <h3>Made for Community</h3>
+        <p>Whether Bangladeshi, Pakistani, Arab, or simply someone who loves extraordinary food — this is the taste that brings people together and keeps them coming back.</p>
+      </div>
+      <div class="card">
+        <div class="card-accent"></div>
+        <span class="cnum">06 —</span><span class="cico">✓</span>
+        <h3>100% Halal & Fresh</h3>
+        <p>Every ingredient sourced fresh. Every pot made to order. We never freeze, never compromise. Minimum 2 plates per order — because kacchi deserves proper preparation.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- STORY TEASER -->
+  <section class="story-section">
+    <div class="story-inner">
+      <div class="story-img-wrap reveal">
+        <!--
+          TO CHANGE THIS PHOTO: replace images/borhani-1-web.jpg with your photo
+        -->
+        <img class="story-food-img"
+             src="images/Kacchi-and-Borhani.png"
+             alt="Dhaka Kacchi Berlin — Borhani"
+             loading="lazy">
+        <div class="story-badge">
+          <span>Berlin</span>
+          <small>Germany</small>
+        </div>
+      </div>
+      <div class="reveal">
+        <span class="sec-eye">The Story Behind the Pot</span>
+        <h2 class="sec-title" style="margin-bottom:24px;">I searched all of<br><em>Berlin. Then I cooked.</em></h2>
+        <p class="story-p">I came to Berlin to pursue my German medical license — juggling the demands of study, a young family, and life in a new country. And through it all, I craved kacchi. Real kacchi. The kind from Old Dhaka.</p>
+        <p class="story-p">I searched everywhere. Nobody had it. Not even close. So between medical studies and motherhood, I started Dhaka Kacchi — for the community, for the memory, and for the joy of watching someone take that first bite and close their eyes.</p>
+        <div class="pull">"Not a business first — a love of food, heritage, and community."</div>
+        <div class="tags">
+          <span class="tag">Berlin-based</span>
+          <span class="tag">Family Recipe</span>
+          <span class="tag">Doctor & Cook</span>
+          <span class="tag">Made with Love</span>
+        </div>
+        <div style="margin-top:40px;">
+          <a class="wa-btn" href="pages/about.html"><span>Read Our Full Story</span><span>→</span></a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOD SPOTLIGHT with real kacchi photo as bg -->
+  <section class="food-section">
+    <div class="food-hero">
+      <!--
+        This kacchi image is the background of the spotlight section.
+        TO CHANGE: replace images/kacchi.jpg
+      -->
+      <img class="food-hero-img"
+           src="images/kacchi.jpg"
+           alt="Kacchi Biriyani Berlin"
+           loading="lazy">
+      <div class="food-center reveal">
+        <span class="sec-eye" style="display:block;margin-bottom:20px;">Taste that hits your heart</span>
+        <h2>Kacchi. <em>Borhani.</em><br>Berlin.</h2>
+        <p style="margin-top:22px;">Tender mutton. Fragrant basmati. A symphony of Bengali spices. Sealed and slow-cooked until every grain of rice carries the soul of the dish. Paired with ice-cold Borhani. Now in Berlin.</p>
+      </div>
+    </div>
+    <div class="specs">
+      <div class="spec"><span class="snum">6+</span><span class="slabel">Hours Slow-Cooked</span></div>
+      <div class="spec"><span class="snum">45+</span><span class="slabel">Spices Blended</span></div>
+      <div class="spec"><span class="snum">24h</span><span class="slabel">Overnight Marinade</span></div>
+      <div class="spec"><span class="snum">48h</span><span class="slabel">Advance Order</span></div>
+    </div>
+  </section>
+
+  <!-- HOW TO ORDER -->
+  <section class="timeline-section">
+    <div class="timeline-inner">
+      <div class="timeline-head reveal">
+        <span class="sec-eye">How to Order in Berlin</span>
+        <h2 class="sec-title">Simple as <em>one message.</em></h2>
+      </div>
+      <div class="timeline-items">
+        <div class="t-item reveal">
+          <span class="t-year">Step 1</span>
+          <h3>Subscribe or Message</h3>
+          <p>Join our subscriber list for first access to every batch. Or message directly on WhatsApp. Subscribers hear about batch dates before anyone else.</p>
+        </div>
+        <div class="t-item reveal">
+          <span class="t-year">Step 2</span>
+          <h3>Order 48 Hours Ahead</h3>
+          <p>We prepare everything from scratch. Please order at least 48 hours in advance so your kacchi gets the time it deserves. Minimum 2 plates per order.</p>
+        </div>
+        <div class="t-item reveal">
+          <span class="t-year">Step 3</span>
+          <h3>Collect in Berlin</h3>
+          <p>Pick up your order in Berlin. Location shared upon order confirmation. Each batch is prepared fresh, in full — never frozen, never reheated.</p>
+        </div>
+        <div class="t-item reveal">
+          <span class="t-year">Enjoy</span>
+          <h3>Close Your Eyes. Take a Bite.</h3>
+          <p>The rest takes care of itself.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SUBSCRIBE CTA -->
+  <section class="cta-section">
+    <div class="cta-inner reveal">
+      <span class="sec-eye" style="display:block;margin-bottom:16px;">Join the Circle</span>
+      <h2>Be the first to<br><em>know everything.</em></h2>
+      <p>Subscribe and get exclusive offers, Eid menus, seasonal specials, batch announcements — and food stories. Subscribers always get first access.</p>
+      <a class="wa-btn" href="pages/subscribe.html"><span>Subscribe — It's Free</span><span>→</span></a>
+      <p class="ord-loc">📍 Berlin, Germany &nbsp;·&nbsp; No spam · Unsubscribe anytime</p>
+    </div>
+  </section>
+
+  <script src="js/nav.js"></script>
+</body>
+</html>
