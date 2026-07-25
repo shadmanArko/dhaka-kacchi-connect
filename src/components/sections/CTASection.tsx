@@ -2,7 +2,7 @@ import { type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { Reveal } from "@/components/ui/Reveal";
 import { Eyebrow } from "@/components/ui/Typography";
-import { AnchorButton } from "@/components/ui/Button";
+import { AnchorButton } from "@/components/ui/DkButton";
 
 type Props = {
   eyebrow: string;

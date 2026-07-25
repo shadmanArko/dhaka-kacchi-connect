@@ -6,15 +6,13 @@ type Props = {
   children: ReactNode;
   className?: string;
   delayMs?: number;
-  as?: keyof JSX.IntrinsicElements;
 };
 
-export function Reveal({ children, className, delayMs = 0, as: Tag = "div" }: Props) {
-  const { ref, visible } = useReveal<HTMLElement>();
+export function Reveal({ children, className, delayMs = 0 }: Props) {
+  const { ref, visible } = useReveal<HTMLDivElement>();
   const style = delayMs ? { transitionDelay: `${delayMs}ms` } : undefined;
   return (
-    // @ts-expect-error dynamic tag ref
-    <Tag
+    <div
       ref={ref}
       style={style}
       className={cn(
@@ -24,6 +22,6 @@ export function Reveal({ children, className, delayMs = 0, as: Tag = "div" }: Pr
       )}
     >
       {children}
-    </Tag>
+    </div>
   );
 }

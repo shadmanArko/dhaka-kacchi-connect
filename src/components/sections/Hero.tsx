@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { MapPin } from "lucide-react";
-import { AnchorButton } from "@/components/ui/Button";
+import { AnchorButton } from "@/components/ui/DkButton";
 import { Rings } from "@/components/ui/Rings";
 import kacchi from "@/assets/kacchi.jpg.asset.json";
 
