@@ -107,15 +107,20 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ email }),
     }),
-  getMenu: () => apiFetch<{ items: MenuItem[] }>("/menu"),
-  getAvailability: () => apiFetch<{ dates: string[] }>("/availability"),
+  // Every ordering endpoint lives under /v1 on the backend (see
+  // worker/src/index.ts) - versioned from day one so a future breaking
+  // change never has to retrofit a prefix onto paths a real client (or
+  // this frontend) already depends on. /subscribe is unrelated - it isn't
+  // implemented in worker/ yet (see BACKEND.md), so it stays unprefixed.
+  getMenu: () => apiFetch<{ items: MenuItem[] }>("/v1/menu"),
+  getAvailability: () => apiFetch<{ dates: string[] }>("/v1/availability"),
   quoteDelivery: (address: DeliveryAddressInput) =>
-    apiFetch<DeliveryQuote>("/delivery-quote", {
+    apiFetch<DeliveryQuote>("/v1/delivery-quote", {
       method: "POST",
       body: JSON.stringify(address),
     }),
   submitOrder: (order: OrderInput) =>
-    apiFetch<OrderResult>("/orders", {
+    apiFetch<OrderResult>("/v1/orders", {
       method: "POST",
       body: JSON.stringify(order),
     }),

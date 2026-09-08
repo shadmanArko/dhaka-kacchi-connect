@@ -31,36 +31,54 @@ Prefers plain, concrete explanations and simple working solutions over clever on
    project as **TanStack Start** (SSR + server functions, Vite, bun), not a plain
    Vite SPA. Default Nitro build target is Cloudflare. This matters for hosting —
    see the split architecture below.
-5. **Hosting/deployment — split architecture** (decided after confirming Arko's
-   Hostinger plan is **Business**, static hosting only, no Node.js option):
-    - **Frontend**: this repo, built as a static SPA (not using TanStack Start's
-      SSR/server-functions for order logic), deployed to Hostinger via
-      **GitHub Actions**: build on push to `main` → SFTP the built output into
-      `public_html`. Uses Arko's existing Hostinger subscription.
-    - **Backend (order API)**: a separate **Cloudflare Worker** (free tier),
-      since Hostinger Business can't run a Node/server process. Owns all order
+5. **Hosting/deployment — split architecture, revised 2026-09-07** (Arko's
+   explicit decision: frontend, backend, and database must be three
+   separately-deployable systems that stay connected, so a future second
+   backend can plug in later without redesigning any of this):
+    - **Frontend**: this repo's `src/`, built as a static SPA, deployed to
+      Hostinger via **GitHub Actions**: build on push to `main` → SFTP the
+      built output into `public_html`. Uses Arko's existing Hostinger
+      subscription. Only ever talks to the backend over HTTPS via
+      `VITE_API_BASE_URL` — no backend code or secrets ship in this bundle.
+    - **Backend (order API)**: `worker/` — plain **Node.js + Postgres**
+      (moved off Cloudflare Workers/D1 2026-09-07/08; the original
+      Cloudflare version lives on only in git history). Runs in Docker on a
+      **Contabo VPS**, behind Caddy for automatic HTTPS. Owns all order
       logic — validation, cutoff enforcement, email confirmation, WhatsApp
-      alert, storage. Frontend calls it over HTTPS as a plain REST API.
-    - **Data storage**: **Cloudflare D1** (SQLite, runs natively with the
-      Worker) — chosen over Supabase to avoid a second service to manage.
+      alert, storage. See `worker/CLAUDE.md` and `worker/ARCHITECTURE.md`
+      for how it works and how to change it.
+    - **Data storage**: **Postgres 16**, one instance on the VPS, two
+      databases (`ordering` for this backend, `warehouse` for the separate
+      AI/analytics system in the sibling `dhaka_kacchi_ai_harness` repo) —
+      a real database boundary, not just separate schemas, so each backend
+      gets its own least-privilege role.
+    - **Why moved off Cloudflare**: D1 is only reachable from a Cloudflare
+      Worker or the `wrangler` CLI — a future second backend on the VPS
+      couldn't share that database. Postgres on the VPS can be shared by
+      any number of backends.
     - Secrets (SSH host/user/key for Hostinger, Twilio credentials, email
-      service credentials, later ANTHROPIC_API_KEY for chatbot features) go in
-      GitHub repo → Settings → Secrets and variables → Actions, and in
-      Cloudflare Worker secrets (`wrangler secret`). Never in code.
+      service credentials, `DATABASE_URL`, later `ANTHROPIC_API_KEY` for
+      chatbot features) go in GitHub repo → Settings → Secrets and variables
+      → Actions (frontend), and in a `.env` file on the VPS (backend, never
+      committed). Never in code.
 6. **Repo structure:**
    ```
    src/                    (frontend — Lovable-owned UI, TanStack Start/React)
      components/
      routes/               (Home, About, History, Order, Subscribe)
      lib/                  (API calls, utils)
-   worker/                 (backend — Claude-Code-owned, separate Cloudflare Worker)
-     src/                  (order API route handlers)
-     schema.sql            (D1 schema)
-     wrangler.toml
+   worker/                 (backend — Claude-Code-owned, Node.js + Postgres)
+     src/                  (order API route handlers, business logic)
+     schema.sql            (Postgres schema, applied via `npm run db:migrate`)
+     CLAUDE.md             (how to run/maintain this backend)
+     ARCHITECTURE.md       (how it fits together)
    public/
      images/
-   .github/workflows/      (deploy-frontend.yml → Hostinger, deploy-worker.yml → Cloudflare)
+   .github/workflows/      (deploy-frontend.yml → Hostinger)
    ```
+   The shared VPS infrastructure (`docker-compose.yml`, `Caddyfile`,
+   Postgres-init scripts, backups) lives in `dhaka_kacchi_ai_harness` —
+   that repo already hosts the warehouse, the other tenant of the same VPS.
 
 ## Frontend / backend split (important — governs how work is divided)
 - **Frontend: Lovable is fine.** UI, pages, visual polish, component structure —
@@ -145,18 +163,40 @@ Prefers plain, concrete explanations and simple working solutions over clever on
 - **Admin view:** not yet decided — no dashboard requested yet; revisit later
   if Arko wants one (orders currently only need email + WhatsApp visibility).
 
-## Ordering system — build status (2026-07-25; delivery model rebuilt 2026-09-08)
+## Ordering system — build status (2026-07-25; delivery model rebuilt 2026-09-08; ported off Cloudflare 2026-09-07/08)
 - **Built and verified working end-to-end** (Playwright-driven click-through,
   as of 2026-07-25, against the ORIGINAL station-based model — re-verify
   against the new pickup/delivery flow before relying on this claim again):
-  - `worker/` — Cloudflare Worker + D1 backend. Routes: `GET /menu`,
-    `GET /availability`, `POST /delivery-quote`, `POST /orders`. Pricing,
-    cutoff validation, and delivery-fee computation are all server-side
-    authoritative (frontend never sets its own price or delivery fee — the
-    server always re-derives both). See `worker/README.md` for setup/deploy.
+  - `worker/` — Node.js + Postgres backend (ported from Cloudflare
+    Workers + D1; see "Ported off Cloudflare" below). Routes: `GET /v1/menu`,
+    `GET /v1/availability`, `POST /v1/delivery-quote`, `POST /v1/orders`,
+    plus an unversioned `GET /health`. Pricing, cutoff validation, and
+    delivery-fee computation are all server-side authoritative (frontend
+    never sets its own price or delivery fee — the server always re-derives
+    both). Manually verified against every one of these routes (pickup order,
+    delivery order, valid and rejected postal codes) after the port; see
+    `worker/CLAUDE.md` for setup/run and `worker/ARCHITECTURE.md` for how it
+    fits together.
   - `src/routes/order.tsx` — real order form (replaced the old WhatsApp-only
-    page), calling the Worker via `src/lib/api.ts`. Falls back to the old
+    page), calling the backend via `src/lib/api.ts`. Falls back to the old
     WhatsApp button if the API is unreachable.
+- **Ported off Cloudflare Workers/D1 to Node.js/Postgres, 2026-09-07/08**:
+  driven by Arko's decision to split frontend/backend/database into three
+  independently-deployable systems (frontend → Hostinger, backend+database →
+  a Contabo VPS) that a future second backend can also connect to — D1 is
+  only reachable from a Cloudflare Worker or `wrangler`, so it couldn't be
+  shared. Also applied the SOLID/loose-coupling/documentation/API-readiness
+  standards Arko asked for while the code was already being touched: routes
+  now depend on an `OrdersRepository` interface, not a concrete Postgres
+  pool (`worker/src/lib/ordersRepository.ts`); order notifications (email,
+  WhatsApp) are decoupled via a small awaitable pub/sub
+  (`worker/src/lib/orderEvents.ts`) instead of being called inline from the
+  route handler; every route is versioned under `/v1` and typed with `zod`,
+  which also generates a real OpenAPI document at `/v1/doc` for a future
+  mobile/web app to build a client from (validated clean against the
+  Redocly OpenAPI linter). Business logic (menu pricing, delivery pricing,
+  date/cutoff rules) is unchanged byte-for-byte — only the runtime, database
+  driver, and internal wiring changed.
 - **Delivery model rebuilt 2026-09-08**: retired the fixed 27-station
   free-delivery list entirely, replaced by free pickup at the kitchen
   (Leopoldplatz/Müllerstraße 25) plus distance-tiered doorstep delivery
@@ -187,17 +227,17 @@ Prefers plain, concrete explanations and simple working solutions over clever on
   less precise than full street-address geocoding, acceptable given the fee
   tiers are 5km-wide bands.
 - **Not yet done:**
-  - D1 database not yet created in a real Cloudflare account (`wrangler d1
-    create` + paste the id into `worker/wrangler.toml`) — currently only
-    verified against local D1 emulation.
+  - Contabo VPS not yet provisioned — `worker/` and Postgres only run
+    locally so far. See the VPS infrastructure files and provisioning
+    sequence in `dhaka_kacchi_ai_harness` (Docker Compose, Caddy,
+    Postgres-init, backups) once written.
   - Hostinger business email SMTP credentials not yet set (needed for order
     confirmation emails — `sendConfirmationEmail` currently no-ops with a
     warning if unset, so this doesn't block launch).
   - Twilio account + WhatsApp sender not yet set up (same graceful no-op
     behavior via `sendWhatsAppAlert`).
-  - No CI/CD yet for either the frontend (Hostinger SFTP) or the Worker
-    (`wrangler deploy` via GitHub Actions, needs a `CLOUDFLARE_API_TOKEN` repo
-    secret).
+  - No CI/CD yet for the frontend (Hostinger SFTP via GitHub Actions) or an
+    automated deploy for `worker/` to the VPS — both still manual for now.
   - ERP integration details — deferred, Arko to scope later.
   - Whether a separate admin dashboard is wanted (orders, subscribers, batches).
   - Timeline/scope for the chatbot or agentic AI integration mentioned as a later phase.

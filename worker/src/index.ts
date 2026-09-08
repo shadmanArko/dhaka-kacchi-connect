@@ -1,111 +1,154 @@
-import { Hono } from "hono";
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { cors } from "hono/cors";
-import type { Env } from "./types";
+import { config } from "./config";
+import { pool } from "./db";
 import { MENU } from "./data";
 import { getAvailableDeliveryDates, isDeliveryDateStillOrderable } from "./lib/dates";
-import { quoteDeliveryForAddress, type DeliveryAddressInput } from "./lib/delivery";
+import { quoteDeliveryForAddress } from "./lib/delivery";
+import { registerEmailNotifications } from "./lib/email";
+import { emitOrderCreated } from "./lib/orderEvents";
+import { OrderValidationError, priceOrder, type OrderRecord } from "./lib/orders";
+import { createPostgresOrdersRepository } from "./lib/ordersRepository";
+import { registerWhatsAppNotifications } from "./lib/whatsapp";
 import {
-  OrderValidationError,
-  insertOrder,
-  markNotificationsSent,
-  priceOrder,
-  type DeliveryAddressFields,
-  type OrderInput,
-  type OrderRecord,
-} from "./lib/orders";
-import { sendConfirmationEmail } from "./lib/email";
-import { sendWhatsAppAlert } from "./lib/whatsapp";
+  DeliveryAddressSchema,
+  DeliveryQuoteResponseSchema,
+  ErrorResponseSchema,
+  MenuItemSchema,
+  OrderInputSchema,
+  OrderResultSchema,
+} from "./schemas";
 
-const app = new Hono<{ Bindings: Env }>();
+// Wiring, done once at startup: the concrete Postgres repository is created
+// here and handed to anything that needs to persist or react to orders.
+// Route handlers below only ever see the OrdersRepository interface.
+const ordersRepository = createPostgresOrdersRepository(pool);
+registerEmailNotifications(ordersRepository);
+registerWhatsAppNotifications(ordersRepository);
 
-app.use("*", async (c, next) => {
-  const allowedOrigins = c.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim());
-  return cors({
-    origin: (origin) => (origin && allowedOrigins.includes(origin) ? origin : allowedOrigins[0]),
-    allowMethods: ["GET", "POST", "OPTIONS"],
-    allowHeaders: ["Content-Type"],
-  })(c, next);
+const app = new OpenAPIHono({
+  defaultHook: (result, c) => {
+    if (!result.success) {
+      return c.json({ error: "invalid_input", message: result.error.issues[0]?.message ?? "Invalid request." }, 400);
+    }
+  },
 });
 
-app.get("/health", (c) => c.json({ ok: true }));
-
-app.get("/menu", (c) =>
-  c.json({
-    items: MENU.map(({ sku, name, priceCents, description }) => ({
-      sku,
-      name,
-      priceCents,
-      description,
-    })),
+app.use(
+  "*",
+  cors({
+    origin: (origin) => (origin && config.allowedOrigins.includes(origin) ? origin : config.allowedOrigins[0]),
+    allowMethods: ["GET", "POST", "OPTIONS"],
+    allowHeaders: ["Content-Type"],
   }),
 );
 
-app.get("/availability", (c) => c.json({ dates: getAvailableDeliveryDates(new Date(), 4) }));
+// Health check stays unversioned and outside /v1 - it's for infra probes
+// (Docker healthchecks, uptime monitors), not API consumers, and it should
+// never break if the API's version ever changes.
+app.get("/health", (c) => c.json({ ok: true }));
 
+const v1 = new OpenAPIHono();
+
+const menuRoute = createRoute({
+  method: "get",
+  path: "/menu",
+  operationId: "getMenu",
+  summary: "Get the current menu",
+  security: [], // deliberately public - this whole API has no auth today
+  responses: {
+    200: {
+      content: { "application/json": { schema: z.object({ items: z.array(MenuItemSchema) }) } },
+      description: "The current menu.",
+    },
+  },
+});
+v1.openapi(menuRoute, (c) =>
+  c.json({
+    items: MENU.map(({ sku, name, priceCents, description }) => ({ sku, name, priceCents, description })),
+  }),
+);
+
+const availabilityRoute = createRoute({
+  method: "get",
+  path: "/availability",
+  operationId: "getAvailability",
+  summary: "Get upcoming orderable delivery/pickup dates",
+  security: [], // deliberately public - this whole API has no auth today
+  responses: {
+    200: {
+      content: { "application/json": { schema: z.object({ dates: z.array(z.string()) }) } },
+      description: "Upcoming orderable Saturdays (YYYY-MM-DD).",
+    },
+  },
+});
+v1.openapi(availabilityRoute, (c) => c.json({ dates: getAvailableDeliveryDates(new Date(), 4) }));
+
+const deliveryQuoteRoute = createRoute({
+  method: "post",
+  path: "/delivery-quote",
+  operationId: "quoteDeliveryFee",
+  summary: "Preview the delivery fee for an address",
+  security: [], // deliberately public - this whole API has no auth today
+  request: {
+    body: { content: { "application/json": { schema: DeliveryAddressSchema } }, required: true },
+  },
+  responses: {
+    200: {
+      content: { "application/json": { schema: DeliveryQuoteResponseSchema } },
+      description: "Whether the address is deliverable and, if so, at what fee.",
+    },
+    400: {
+      content: { "application/json": { schema: ErrorResponseSchema } },
+      description: "The request body failed validation.",
+    },
+  },
+});
 // Public, no mutation - lets the customer see the delivery fee before they
 // submit an order. Deliberately re-run in full by POST /orders below, never
 // trusted as-is: this endpoint is a preview, not an authorization.
-app.post("/delivery-quote", async (c) => {
-  let body: Partial<DeliveryAddressInput>;
-  try {
-    body = await c.req.json();
-  } catch {
-    return c.json({ error: "invalid_input", message: "Invalid JSON body." }, 400);
-  }
-
-  const result = quoteDeliveryForAddress({
-    street: body.street ?? "",
-    houseNumber: body.houseNumber ?? "",
-    postalCode: body.postalCode ?? "",
-    city: body.city ?? "",
-  });
-
+v1.openapi(deliveryQuoteRoute, (c) => {
+  const address = c.req.valid("json");
+  const result = quoteDeliveryForAddress(address);
   if (!result.ok) {
     return c.json({ error: result.reason, message: result.message }, 400);
   }
   return c.json(result, 200);
 });
 
-app.post("/orders", async (c) => {
-  let body: Partial<OrderInput>;
-  try {
-    body = await c.req.json();
-  } catch {
-    return c.json({ error: "Invalid JSON body." }, 400);
+const ordersRoute = createRoute({
+  method: "post",
+  path: "/orders",
+  operationId: "createOrder",
+  summary: "Place a new order (cash on delivery)",
+  security: [], // deliberately public - this whole API has no auth today
+  request: {
+    body: { content: { "application/json": { schema: OrderInputSchema } }, required: true },
+  },
+  responses: {
+    201: {
+      content: { "application/json": { schema: OrderResultSchema } },
+      description: "The order was created.",
+    },
+    400: {
+      content: { "application/json": { schema: ErrorResponseSchema } },
+      description: "The request was invalid, or the address isn't deliverable.",
+    },
+  },
+});
+v1.openapi(ordersRoute, async (c) => {
+  const body = c.req.valid("json");
+  const { items, deliveryDate, fulfillmentType, address, customerName, customerEmail, customerPhone, notes } = body;
+
+  if (!isDeliveryDateStillOrderable(deliveryDate, new Date())) {
+    return c.json({ error: "invalid_delivery_date", message: "That delivery date is no longer available. Please pick a valid Saturday." }, 400);
   }
 
-  const {
-    items,
-    deliveryDate,
-    fulfillmentType,
-    address,
-    customerName,
-    customerEmail,
-    customerPhone,
-    notes,
-  } = body;
-
-  if (!deliveryDate || !isDeliveryDateStillOrderable(deliveryDate, new Date())) {
-    return c.json(
-      { error: "That delivery date is no longer available. Please pick a valid Saturday." },
-      400,
-    );
-  }
-  if (fulfillmentType !== "pickup" && fulfillmentType !== "delivery") {
-    return c.json({ error: "Please choose pickup or delivery." }, 400);
-  }
-  if (!customerName?.trim() || !customerEmail?.trim() || !customerPhone?.trim()) {
-    return c.json({ error: "Name, email, and phone are required." }, 400);
-  }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
-    return c.json({ error: "Please provide a valid email address." }, 400);
-  }
-
-  // The server ALWAYS re-derives the delivery fee itself here — mirroring how
-  // priceOrder() re-derives menu prices below. The client never sends a fee,
-  // distance, or coordinates; a quote fetched from /delivery-quote a moment
-  // earlier is only ever a preview, never a token of authorization.
-  let addressFields: DeliveryAddressFields | null = null;
+  // The server ALWAYS re-derives the delivery fee itself here — mirroring
+  // how priceOrder() re-derives menu prices below. The client never sends a
+  // fee, distance, or coordinates; a quote fetched from /delivery-quote a
+  // moment earlier is only ever a preview, never a token of authorization.
+  let addressFields: OrderRecord["address"] = null;
   let addressLat: number | null = null;
   let addressLng: number | null = null;
   let distanceKm: number | null = null;
@@ -113,7 +156,7 @@ app.post("/orders", async (c) => {
 
   if (fulfillmentType === "delivery") {
     if (!address) {
-      return c.json({ error: "A delivery address is required." }, 400);
+      return c.json({ error: "address_required", message: "A delivery address is required." }, 400);
     }
     const quote = quoteDeliveryForAddress(address);
     if (!quote.ok) {
@@ -137,10 +180,10 @@ app.post("/orders", async (c) => {
 
   let pricedItems: OrderRecord["items"];
   try {
-    pricedItems = priceOrder(items ?? []);
+    pricedItems = priceOrder(items);
   } catch (err) {
     if (err instanceof OrderValidationError) {
-      return c.json({ error: err.message }, 400);
+      return c.json({ error: "invalid_items", message: err.message }, 400);
     }
     throw err;
   }
@@ -163,19 +206,11 @@ app.post("/orders", async (c) => {
     items: pricedItems,
   };
 
-  await insertOrder(c.env, order);
-
-  const [emailSent, whatsappSent] = await Promise.all([
-    sendConfirmationEmail(c.env, order).catch((err) => {
-      console.error("sendConfirmationEmail failed:", err);
-      return false;
-    }),
-    sendWhatsAppAlert(c.env, order).catch((err) => {
-      console.error("sendWhatsAppAlert failed:", err);
-      return false;
-    }),
-  ]);
-  await markNotificationsSent(c.env, order.id, { emailSent, whatsappSent });
+  await ordersRepository.insertOrder(order);
+  // Fans out to every registered listener (currently email + WhatsApp) and
+  // waits for all of them - see orderEvents.ts for why a plain EventEmitter
+  // isn't used here.
+  await emitOrderCreated(order);
 
   return c.json(
     {
@@ -186,10 +221,24 @@ app.post("/orders", async (c) => {
       subtotalCents: order.subtotalCents,
       deliveryFeeCents: order.deliveryFeeCents,
       totalCents: order.subtotalCents + order.deliveryFeeCents,
-      paymentMethod: "cash_on_delivery",
+      paymentMethod: "cash_on_delivery" as const,
     },
     201,
   );
+});
+
+app.route("/v1", v1);
+
+// The OpenAPI document a future app (or an AI coding agent building one)
+// imports to generate a typed client - this IS the API reference; there is
+// no separate hand-maintained document to drift from the code.
+app.doc("/v1/doc", {
+  openapi: "3.0.0",
+  info: { title: "Dhaka Kacchi Ordering API", version: "1.0.0" },
+  servers: [
+    { url: "https://api.dhakakacchi.de/v1", description: "Production" },
+    { url: "http://localhost:8787/v1", description: "Local development" },
+  ],
 });
 
 export default app;
