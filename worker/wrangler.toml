@@ -1,0 +1,23 @@
+name = "dhaka-kacchi-api"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "dhaka-kacchi"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+
+# Secrets (set via `wrangler secret put <NAME>`, never committed):
+#   HOSTINGER_SMTP_HOST, HOSTINGER_SMTP_PORT, HOSTINGER_SMTP_USER, HOSTINGER_SMTP_PASS
+#   TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_FROM, ARKO_WHATSAPP_TO
+#
+# Doorstep delivery pricing (src/lib/delivery.ts) needs NO secret and NO
+# external account: distance is computed from a German postal-code dataset
+# bundled with the Worker (src/data/postal-code-coordinates.json,
+# src/data/berlin-postal-codes.json) - free, offline, no API key.
+#
+# Vars (non-secret config, safe to commit):
+[vars]
+ALLOWED_ORIGINS = "http://localhost:3000,http://localhost:8080,https://dhakakacchi.de,https://www.dhakakacchi.de"
+ORDER_FROM_EMAIL = "orders@dhakakacchi.de"
