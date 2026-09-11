@@ -28,3 +28,12 @@ export async function withTransaction<T>(fn: (client: PoolClient) => Promise<T>)
     client.release();
   }
 }
+
+/** True if `err` is a Postgres unique-constraint violation (SQLSTATE 23505) -
+ * e.g. two near-simultaneous registrations for the same phone/email racing
+ * past an app-level "does this exist?" check. The UNIQUE index is the real
+ * guard; this just turns the resulting DB error into a normal, expected
+ * outcome for the caller to handle instead of an unhandled exception. */
+export function isUniqueViolation(err: unknown): boolean {
+  return typeof err === "object" && err !== null && (err as { code?: string }).code === "23505";
+}

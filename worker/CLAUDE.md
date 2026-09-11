@@ -2,10 +2,11 @@
 
 ## What this is
 
-The API behind the Dhaka Kacchi ordering site: menu, delivery-fee quotes, and
-order creation (with email + WhatsApp alerts). Node.js + Postgres, plain
-`pg` (no ORM), Hono for HTTP routing. Runs as one long-lived process — in
-Docker on the VPS in production, via `npm run dev` locally.
+The API behind the Dhaka Kacchi ordering site: customer accounts (phone/email
++ password, OTP-verified at signup), menu, delivery-fee quotes, and order
+creation (with email confirmation + a Telegram alert to the owner). Node.js +
+Postgres, plain `pg` (no ORM), Hono for HTTP routing. Runs as one long-lived
+process — in Docker on the VPS in production, via `npm run dev` locally.
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for how the pieces fit together and
 why they're structured this way. This file is just "how do I change X."
@@ -19,9 +20,12 @@ npm run db:migrate          # applies schema.sql — safe to re-run, but see war
 npm run dev                 # http://localhost:8787, auto-restarts on file changes
 ```
 
-Without SMTP/Twilio vars set, orders still save correctly — email/WhatsApp
-sending just logs a warning and skips. Nothing blocks local development on
-having real credentials.
+Without SMTP/Telegram vars set, orders still save correctly — those just log
+a warning and skip. **OTP codes and password-reset links are different**:
+without `BERLIN_SMS_API_KEY`/`HOSTINGER_SMTP_*` configured, the code/link
+is printed to the console instead of actually sent, so registration and
+"forgot password" both stay fully testable locally with zero real
+credentials — look for a `[dev] ...` line in the server's output.
 
 **`npm run db:migrate` runs `DROP TABLE IF EXISTS` before every
 `CREATE TABLE`.** Fine against an empty or throwaway database. Never run it
@@ -50,7 +54,7 @@ path, request/response `zod` schemas, `operationId`, `summary`,
 Add a new file under `src/lib/` that calls `onOrderCreated(...)` from
 [src/lib/orderEvents.ts](./src/lib/orderEvents.ts), then import it once from
 `src/index.ts` (see how `registerEmailNotifications` and
-`registerWhatsAppNotifications` are wired). No existing file needs to change.
+`registerTelegramNotifications` are wired). No existing file needs to change.
 
 **5. Add a database column**
 Add it to the relevant `CREATE TABLE` in [schema.sql](./schema.sql), update
@@ -58,27 +62,72 @@ the matching TypeScript type in `src/lib/orders.ts`, and update the
 `INSERT`/`UPDATE` in `src/lib/ordersRepository.ts`. Re-run `npm run
 db:migrate` against a dev database (see the warning above about real data).
 
+**6. Add a new authenticated route**
+Same as #3, but also add `security: [{ bearerAuth: [] }]` to the
+`createRoute({...})` call and register the guard once, before any route
+definitions: `v1.use("/your-path", requireAuth(sessionsRepository))` — see
+[src/lib/authMiddleware.ts](./src/lib/authMiddleware.ts) and how `/orders`,
+`/me`, `/auth/logout` already do this in `src/index.ts`.
+
+## Customer accounts
+
+Every order requires a logged-in account — there's no guest checkout.
+Registration collects phone/name/DOB/address/email/password, generates a
+6-digit code, and texts it via **BerlinSMS's plain SMS API**
+([src/lib/berlinSms.ts](./src/lib/berlinSms.ts)) — chosen over BerlinSMS's
+separate managed "2FA" product specifically so the message wording is
+fully ours to control. The account is only created once that code is
+confirmed. Regular login is phone-or-email + password — no OTP on every
+login, since that would mean an SMS cost per login instead of a one-time
+cost per new customer. "Forgot password" is email-only, on purpose, never
+phone/SMS — see [src/lib/auth.ts](./src/lib/auth.ts) for every
+OTP/session/lockout/rate-limit constant in one place, and
+[ARCHITECTURE.md](./ARCHITECTURE.md) for the full design rationale.
+
+A logged-in customer's email/phone are permanently locked once verified —
+`POST /orders` always takes them from the account, never from the request
+body. Name and address stay editable at checkout, and an edit there writes
+through to the account for next time.
+
 ## Key files, if you need to go deeper
 
 | File | Owns |
 |---|---|
 | `src/config.ts` | Reading and validating environment variables |
-| `src/db.ts` | The Postgres connection pool |
+| `src/db.ts` | The Postgres connection pool, plus a `withTransaction`/`isUniqueViolation` helper |
 | `src/lib/orders.ts` | Order pricing rules — no database, no HTTP |
 | `src/lib/ordersRepository.ts` | Reading/writing orders in Postgres |
+| `src/lib/customers.ts` | Customer domain types — no database, no HTTP |
+| `src/lib/customersRepository.ts` | Reading/writing customer accounts in Postgres |
+| `src/lib/otpRepository.ts` | The 6-digit codes texted at registration |
+| `src/lib/sessionsRepository.ts` | Logged-in sessions (a bearer token's hash → customer) |
+| `src/lib/passwordResetTokensRepository.ts` | "Forgot password" email links |
+| `src/lib/auth.ts` | Password hashing, OTP/token generation, and every OTP/session/lockout/rate-limit constant |
+| `src/lib/authMiddleware.ts` | The `requireAuth()` "you must be signed in" check |
 | `src/lib/delivery.ts` | Delivery-fee calculation |
 | `src/lib/plzLookup.ts` | Postal-code → coordinates lookup |
 | `src/lib/orderEvents.ts` | The "an order was created" event, and who listens |
-| `src/lib/email.ts` / `src/lib/whatsapp.ts` | The two current notification channels |
+| `src/lib/email.ts` | Order-confirmation and password-reset emails |
+| `src/lib/berlinSms.ts` | The one-time OTP text at registration (BerlinSMS's plain SMS API, custom message) |
+| `src/lib/telegram.ts` | The owner's per-order alert (see also `scripts/weeklyDigest.ts`) |
 | `src/schemas.ts` | Request/response shapes (also generates the OpenAPI doc) |
-| `src/index.ts` | Routes — wires schemas, handlers, and the repository together |
+| `src/index.ts` | Routes — wires schemas, handlers, and the repositories together |
 | `src/server.ts` | Process entrypoint (starts the HTTP server, handles shutdown) |
+| `scripts/weeklyDigest.ts` | Friday-evening Telegram summary of the week's orders (cron-triggered, see below) |
 
 ## Deploying
 
 Build and run via Docker (see `Dockerfile`) on the VPS, behind Caddy. See
 the shared VPS infrastructure docs in the sibling `dhaka_kacchi_ai_harness`
 repo for the full setup (`docker-compose.yml`, Caddy, Postgres roles).
+
+The weekly digest (`npm run digest:weekly`) is a plain script, not a route —
+it's meant to be triggered by an OS-level cron job on the VPS at Friday
+18:00 Europe/Berlin (the same moment that Saturday's order cutoff closes),
+e.g.:
+```
+0 18 * * 5 cd /opt/dhaka-kacchi/dhaka-kacchi-connect/worker && npm run digest:weekly >> /var/log/dhaka-kacchi-digest.log 2>&1
+```
 
 ## For a future app
 

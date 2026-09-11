@@ -3,6 +3,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { MessageCircle } from "lucide-react";
 import { PageHero } from "@/components/sections/PageHero";
 import { Reveal } from "@/components/ui/Reveal";
+import { CheckoutAuthModal } from "@/components/auth/CheckoutAuthModal";
+import { useSession } from "@/hooks/useSession";
 import { buildWaLink } from "@/lib/whatsapp";
 import { api, ApiError, type DeliveryQuote, type MenuItem, type OrderResult } from "@/lib/api";
 
@@ -59,8 +61,11 @@ function quoteErrorMessage(quote: DeliveryQuote): string {
 
 const inputClass =
   "px-4 py-4 bg-gold/[0.06] border border-line text-cream placeholder:text-muted-warm font-sans text-[0.88rem] outline-none focus:border-gold/50 transition-colors";
+const lockedInputClass =
+  "px-4 py-4 bg-gold/[0.02] border border-line text-muted-warm font-sans text-[0.88rem] outline-none cursor-not-allowed";
 
 function OrderPage() {
+  const session = useSession();
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [dates, setDates] = useState<string[]>([]);
@@ -73,8 +78,6 @@ function OrderPage() {
   const [postalCode, setPostalCode] = useState("");
   const [city, setCity] = useState("Berlin");
   const [customerName, setCustomerName] = useState("");
-  const [customerEmail, setCustomerEmail] = useState("");
-  const [customerPhone, setCustomerPhone] = useState("");
   const [notes, setNotes] = useState("");
 
   const [quoteState, setQuoteState] = useState<QuoteState>("idle");
@@ -84,6 +87,12 @@ function OrderPage() {
   const [submitState, setSubmitState] = useState<SubmitState>("idle");
   const [submitError, setSubmitError] = useState("");
   const [result, setResult] = useState<OrderResult | null>(null);
+
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  // Tracks which logged-in customer the form fields were last prefilled
+  // from, so a fresh login/registration (or restoring a stored session on
+  // page load) prefills exactly once, without re-stomping later edits.
+  const [prefilledForCustomerId, setPrefilledForCustomerId] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([api.getMenu(), api.getAvailability()])
@@ -95,6 +104,22 @@ function OrderPage() {
       })
       .catch(() => setLoadState("error"));
   }, []);
+
+  // Fills in name/address from the account the moment a session exists -
+  // whether that's a fresh login/registration just now, or a stored session
+  // restored on page load. Editable afterwards; see checkAddress's own
+  // invalidation below for why editing an address doesn't re-run this.
+  useEffect(() => {
+    if (session.customer && session.customer.id !== prefilledForCustomerId) {
+      setCustomerName(session.customer.name);
+      setStreet(session.customer.address.street);
+      setHouseNumber(session.customer.address.houseNumber);
+      setPostalCode(session.customer.address.postalCode);
+      setCity(session.customer.address.city);
+      resetQuote();
+      setPrefilledForCustomerId(session.customer.id);
+    }
+  }, [session.customer, prefilledForCustomerId]);
 
   const subtotalCents = useMemo(
     () => menu.reduce((sum, item) => sum + (quantities[item.sku] ?? 0) * item.priceCents, 0),
@@ -156,41 +181,51 @@ function OrderPage() {
     }
   }
 
-  const canSubmit =
+  // Everything needed before an account is involved - items, a date, and
+  // (for delivery) a confirmed quote. Checkout requires all of this to open
+  // the login/register pop-up at all.
+  const canCheckout =
     itemCount > 0 &&
-    deliveryDate &&
-    customerName.trim() &&
-    customerEmail.trim() &&
-    customerPhone.trim() &&
+    !!deliveryDate &&
     (fulfillmentType === "pickup" || (quoteState === "ready" && quote?.deliverable === true));
+  const canSubmit =
+    canCheckout && !!session.customer && customerName.trim().length > 0 && !session.isLoading;
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!canSubmit) return;
+    if (!canCheckout || session.isLoading) return;
+
+    if (!session.token || !session.customer) {
+      setAuthModalOpen(true);
+      return;
+    }
+    if (!customerName.trim()) return;
+
     setSubmitState("submitting");
     setSubmitError("");
     try {
       const items = Object.entries(quantities)
         .filter(([, qty]) => qty > 0)
         .map(([sku, quantity]) => ({ sku, quantity }));
-      const res = await api.submitOrder({
-        items,
-        deliveryDate,
-        fulfillmentType,
-        address:
-          fulfillmentType === "delivery"
-            ? {
-                street: street.trim(),
-                houseNumber: houseNumber.trim(),
-                postalCode: postalCode.trim(),
-                city: city.trim(),
-              }
-            : undefined,
-        customerName: customerName.trim(),
-        customerEmail: customerEmail.trim(),
-        customerPhone: customerPhone.trim(),
-        notes: notes.trim() || undefined,
-      });
+      const res = await api.submitOrder(
+        {
+          items,
+          deliveryDate,
+          fulfillmentType,
+          address:
+            fulfillmentType === "delivery"
+              ? {
+                  street: street.trim(),
+                  houseNumber: houseNumber.trim(),
+                  postalCode: postalCode.trim(),
+                  city: city.trim(),
+                }
+              : undefined,
+          customerName: customerName.trim(),
+          notes: notes.trim() || undefined,
+        },
+        session.token,
+      );
       setResult(res);
       setSubmitState("success");
     } catch (err) {
@@ -281,6 +316,22 @@ function OrderPage() {
 
           {loadState === "ready" && (
             <form onSubmit={onSubmit} className="space-y-10">
+              {session.customer && (
+                <div className="flex items-center justify-between font-sans text-[0.78rem] text-muted-warm">
+                  <span>
+                    Logged in as <span className="text-cream">{session.customer.name}</span> (
+                    {session.customer.email})
+                  </span>
+                  <button
+                    type="button"
+                    onClick={session.logout}
+                    className="text-gold hover:text-gold-2 underline underline-offset-4"
+                  >
+                    Log out
+                  </button>
+                </div>
+              )}
+
               <fieldset className="space-y-4">
                 <legend className="font-sans text-[0.68rem] uppercase tracking-[0.3em] text-gold-3 mb-2">
                   Your Items
@@ -454,39 +505,45 @@ function OrderPage() {
                 )}
               </fieldset>
 
-              <fieldset className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <input
-                  type="text"
-                  required
-                  placeholder="Full name"
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  className={inputClass}
-                />
-                <input
-                  type="tel"
-                  required
-                  placeholder="Phone number"
-                  value={customerPhone}
-                  onChange={(e) => setCustomerPhone(e.target.value)}
-                  className={inputClass}
-                />
-                <input
-                  type="email"
-                  required
-                  placeholder="Email address"
-                  value={customerEmail}
-                  onChange={(e) => setCustomerEmail(e.target.value)}
-                  className={`sm:col-span-2 ${inputClass}`}
-                />
-                <textarea
-                  placeholder="Notes (optional)"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  rows={3}
-                  className={`sm:col-span-2 resize-none ${inputClass}`}
-                />
-              </fieldset>
+              {session.customer ? (
+                <fieldset className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <input
+                    type="text"
+                    required
+                    placeholder="Full name"
+                    value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
+                    className={inputClass}
+                  />
+                  <input
+                    type="tel"
+                    disabled
+                    readOnly
+                    value={session.customer.phone}
+                    title="Phone is locked to your account"
+                    className={lockedInputClass}
+                  />
+                  <input
+                    type="email"
+                    disabled
+                    readOnly
+                    value={session.customer.email}
+                    title="Email is locked to your account"
+                    className={`sm:col-span-2 ${lockedInputClass}`}
+                  />
+                  <textarea
+                    placeholder="Notes (optional)"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    rows={3}
+                    className={`sm:col-span-2 resize-none ${inputClass}`}
+                  />
+                </fieldset>
+              ) : (
+                <p className="font-sans text-[0.85rem] text-muted-warm">
+                  You'll log in or create an account at checkout to finish your order.
+                </p>
+              )}
 
               <div className="flex items-center justify-between border-t border-line pt-6">
                 <span className="font-sans text-[0.82rem] text-muted-warm">
@@ -503,15 +560,29 @@ function OrderPage() {
 
               <button
                 type="submit"
-                disabled={!canSubmit || submitState === "submitting"}
+                disabled={
+                  session.customer ? !canSubmit || submitState === "submitting" : !canCheckout
+                }
                 className="w-full bg-gold text-black-ink px-9 py-5 font-sans text-[0.8rem] uppercase tracking-[0.25em] hover:bg-gold-2 transition-colors disabled:opacity-50"
               >
-                {submitState === "submitting" ? "Placing order…" : "Place Order — Cash on Delivery"}
+                {session.customer
+                  ? submitState === "submitting"
+                    ? "Placing order…"
+                    : "Place Order — Cash on Delivery"
+                  : "Checkout"}
               </button>
             </form>
           )}
         </Reveal>
       </section>
+
+      <CheckoutAuthModal
+        open={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        prefillAddress={
+          fulfillmentType === "delivery" ? { street, houseNumber, postalCode, city } : undefined
+        }
+      />
     </>
   );
 }

@@ -53,8 +53,8 @@ is not yet implemented there.
 
 Your backend must allow requests from:
 
-- The Lovable preview URL (shown in the top of the editor)
-- The published domain once you publish (`*.lovable.app` or your custom domain)
+- `http://localhost:8080` (local dev)
+- The published domain (`https://dhakakacchi.de` and `https://www.dhakakacchi.de`)
 
 Minimum CORS response headers:
 
@@ -70,9 +70,3 @@ Any HTTP framework works (Hono, Express, FastAPI, Cloudflare Workers…).
 The frontend does not care where it runs, only that the endpoints above exist
 and CORS is configured. Keep API keys (Mailchimp, Brevo, database secrets)
 on the backend — never in `VITE_*` variables.
-
-## If you later want to keep it all in Lovable
-
-Move each endpoint into a TanStack `createServerFn` handler and swap
-`api.subscribe` in `src/lib/api.ts` to call it via `useServerFn`. Components
-don't change.

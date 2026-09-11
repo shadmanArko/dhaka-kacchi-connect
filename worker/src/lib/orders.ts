@@ -18,9 +18,12 @@ export type OrderInput = {
   deliveryDate: string; // YYYY-MM-DD, must be a valid Saturday
   fulfillmentType: "pickup" | "delivery";
   address?: DeliveryAddressFields; // required when fulfillmentType is "delivery"
+  // Editable at checkout. customerEmail/customerPhone are deliberately NOT
+  // here - every order requires a logged-in account (see authMiddleware.ts),
+  // and the server always takes the locked email/phone from that account,
+  // never from the request body - same "never trust the client" rule the
+  // delivery fee and menu prices already follow, extended to identity.
   customerName: string;
-  customerEmail: string;
-  customerPhone: string;
   notes?: string;
 };
 
@@ -34,6 +37,11 @@ export type OrderRecord = {
   addressLng: number | null;
   distanceKm: number | null;
   deliveryFeeCents: number;
+  customerId: string;
+  // A snapshot of the account's identity at order time - not a live join to
+  // `customers`, so a later account edit never silently rewrites a past
+  // order's record. Same convention order_items.name already uses for menu
+  // items (schema.sql).
   customerName: string;
   customerEmail: string;
   customerPhone: string;

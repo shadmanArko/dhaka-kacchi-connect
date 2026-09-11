@@ -66,6 +66,25 @@ export function getAvailableDeliveryDates(now: Date, count = 4): string[] {
   return valid;
 }
 
+/**
+ * The upcoming Saturday (today, if today already is one) as "YYYY-MM-DD" -
+ * NO cutoff filtering, unlike getAvailableDeliveryDates. Used by the weekly
+ * digest script (scripts/weeklyDigest.ts), which runs AT the Friday 18:00
+ * cutoff and needs the Saturday whose ordering window has just closed, not
+ * one still open for new orders.
+ */
+export function nextSaturday(now: Date): string {
+  const nowFakeMs = berlinWallClockFakeMs(now);
+  const todayFakeMs = Date.UTC(
+    new Date(nowFakeMs).getUTCFullYear(),
+    new Date(nowFakeMs).getUTCMonth(),
+    new Date(nowFakeMs).getUTCDate(),
+  );
+  const todayWeekday = new Date(todayFakeMs).getUTCDay();
+  const daysUntilSaturday = (6 - todayWeekday + 7) % 7;
+  return toIsoDate(todayFakeMs + daysUntilSaturday * DAY_MS);
+}
+
 /** Validates that `dateStr` (YYYY-MM-DD) is a Saturday whose order cutoff hasn't passed. */
 export function isDeliveryDateStillOrderable(dateStr: string, now: Date): boolean {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);

@@ -1,6 +1,6 @@
 # Prompt: Build a Dark‑Luxury Food Brand Website
 
-Copy the prompt below into Lovable (or any capable AI coder) to generate a website with the **same look, feel, and architecture** as *Dhaka Kacchi Berlin*. Swap the brand-specific details (name, cuisine, location, contact) for your own.
+Copy the prompt below into any capable AI coding tool to generate a website with the **same look, feel, and architecture** as *Dhaka Kacchi Berlin*. Swap the brand-specific details (name, cuisine, location, contact) for your own.
 
 ---
 
@@ -8,7 +8,7 @@ Copy the prompt below into Lovable (or any capable AI coder) to generate a websi
 
 1. Read the whole prompt once.
 2. Replace every `[[BRACKETED]]` placeholder with your brand's info.
-3. Paste it as a **single message** into a fresh Lovable project.
+3. Paste it as a **single message** into a fresh project.
 4. After the first build, iterate section by section ("refine the hero", "tighten the product grid on mobile", etc.).
 
 Tip: Long prompts work best when they explicitly forbid things you don't want (default fonts, purple gradients, generic hero layouts, etc.).
@@ -101,7 +101,7 @@ Tip: Long prompts work best when they explicitly forbid things you don't want (d
 > │                           values.ts, history.ts  ← ALL COPY LIVES HERE
 > ├── hooks/                  useReveal.ts, useScrolled.ts
 > ├── lib/                    api.ts (single fetch seam), whatsapp.ts, utils.ts
-> ├── assets/                 photos uploaded via lovable-assets (CDN)
+> ├── assets/                 photos served from wherever the CDN/storage is configured
 > └── styles.css              @theme tokens + global animations + film grain
 > ```
 >

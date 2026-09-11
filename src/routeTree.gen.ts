@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SubscribeRouteImport } from './routes/subscribe'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as OrderRouteImport } from './routes/order'
 import { Route as HistoryRouteImport } from './routes/history'
 import { Route as AboutRouteImport } from './routes/about'
@@ -18,6 +19,11 @@ import { Route as IndexRouteImport } from './routes/index'
 const SubscribeRoute = SubscribeRouteImport.update({
   id: '/subscribe',
   path: '/subscribe',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OrderRoute = OrderRouteImport.update({
@@ -46,6 +52,7 @@ export interface FileRoutesByFullPath {
   '/about': typeof AboutRoute
   '/history': typeof HistoryRoute
   '/order': typeof OrderRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/subscribe': typeof SubscribeRoute
 }
 export interface FileRoutesByTo {
@@ -53,6 +60,7 @@ export interface FileRoutesByTo {
   '/about': typeof AboutRoute
   '/history': typeof HistoryRoute
   '/order': typeof OrderRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/subscribe': typeof SubscribeRoute
 }
 export interface FileRoutesById {
@@ -61,14 +69,28 @@ export interface FileRoutesById {
   '/about': typeof AboutRoute
   '/history': typeof HistoryRoute
   '/order': typeof OrderRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/subscribe': typeof SubscribeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/about' | '/history' | '/order' | '/subscribe'
+  fullPaths:
+    | '/'
+    | '/about'
+    | '/history'
+    | '/order'
+    | '/reset-password'
+    | '/subscribe'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/about' | '/history' | '/order' | '/subscribe'
-  id: '__root__' | '/' | '/about' | '/history' | '/order' | '/subscribe'
+  to: '/' | '/about' | '/history' | '/order' | '/reset-password' | '/subscribe'
+  id:
+    | '__root__'
+    | '/'
+    | '/about'
+    | '/history'
+    | '/order'
+    | '/reset-password'
+    | '/subscribe'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -76,6 +98,7 @@ export interface RootRouteChildren {
   AboutRoute: typeof AboutRoute
   HistoryRoute: typeof HistoryRoute
   OrderRoute: typeof OrderRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   SubscribeRoute: typeof SubscribeRoute
 }
 
@@ -86,6 +109,13 @@ declare module '@tanstack/react-router' {
       path: '/subscribe'
       fullPath: '/subscribe'
       preLoaderRoute: typeof SubscribeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/order': {
@@ -124,6 +154,7 @@ const rootRouteChildren: RootRouteChildren = {
   AboutRoute: AboutRoute,
   HistoryRoute: HistoryRoute,
   OrderRoute: OrderRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   SubscribeRoute: SubscribeRoute,
 }
 export const routeTree = rootRouteImport

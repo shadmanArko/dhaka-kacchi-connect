@@ -6,6 +6,7 @@
  * code, and there is no separate API reference to keep in sync by hand.
  */
 import { z } from "@hono/zod-openapi";
+import { isE164 } from "./lib/auth";
 
 export const MenuItemSchema = z
   .object({
@@ -63,14 +64,18 @@ export const OrderItemInputSchema = z
 export const OrderInputSchema = z
   .object({
     items: z.array(OrderItemInputSchema).min(1),
-    deliveryDate: z.string().openapi({ example: "2026-09-12", description: "YYYY-MM-DD, must be a valid Saturday" }),
+    deliveryDate: z
+      .string()
+      .openapi({ example: "2026-09-12", description: "YYYY-MM-DD, must be a valid Saturday" }),
     fulfillmentType: z.enum(["pickup", "delivery"]),
     address: DeliveryAddressSchema.optional().openapi({
       description: "Required when fulfillmentType is 'delivery'",
     }),
+    // customerEmail/customerPhone are deliberately absent - every order
+    // requires a logged-in account (see authMiddleware.ts), and the server
+    // always takes the locked email/phone from that account, never the
+    // request body.
     customerName: z.string().min(1),
-    customerEmail: z.string().email(),
-    customerPhone: z.string().min(1),
     notes: z.string().optional(),
   })
   .openapi("OrderInput");
@@ -91,6 +96,101 @@ export const OrderResultSchema = z
 export const ErrorResponseSchema = z
   .object({
     error: z.string().openapi({ example: "invalid_input" }),
-    message: z.string().optional().openapi({ example: "Postal code must be a 5-digit German PLZ." }),
+    message: z
+      .string()
+      .optional()
+      .openapi({ example: "Postal code must be a 5-digit German PLZ." }),
   })
   .openapi("ErrorResponse");
+
+// --- Customer accounts ---------------------------------------------------
+
+// E.164 only (e.g. "+491701234567") - required before a phone number is
+// ever used as a Twilio `To` value or a rate-limit/uniqueness key, so
+// differently-formatted input for the same real number is never silently
+// treated as two different identifiers (see auth.ts's isE164).
+const PhoneSchema = z
+  .string()
+  .refine(isE164, "Phone number must be in international format, e.g. +491701234567.")
+  .openapi({ example: "+491701234567" });
+
+const PasswordSchema = z.string().min(8, "Password must be at least 8 characters.");
+
+export const PublicCustomerSchema = z
+  .object({
+    id: z.string().openapi({ example: "cust_2f2db69b-a757-4f0d-9ff8-33eee670647f" }),
+    phone: PhoneSchema,
+    email: z.string().email(),
+    name: z.string(),
+    dateOfBirth: z.string().openapi({ example: "1990-05-14" }),
+    address: DeliveryAddressSchema,
+  })
+  .openapi("PublicCustomer");
+
+export const RegisterInputSchema = z
+  .object({
+    phone: PhoneSchema,
+    name: z.string().min(1),
+    dateOfBirth: z.string().openapi({ example: "1990-05-14", description: "YYYY-MM-DD" }),
+    address: DeliveryAddressSchema,
+    email: z.string().email(),
+    password: PasswordSchema,
+  })
+  .openapi("RegisterInput");
+
+export const RegisterResultSchema = z
+  .object({
+    phone: PhoneSchema,
+    expiresAt: z.string().openapi({ description: "ISO 8601 - when the OTP code expires" }),
+    message: z.string(),
+  })
+  .openapi("RegisterResult");
+
+export const VerifyOtpInputSchema = z
+  .object({
+    phone: PhoneSchema,
+    code: z
+      .string()
+      .length(6)
+      .regex(/^\d{6}$/, "Code must be 6 digits."),
+  })
+  .openapi("VerifyOtpInput");
+
+export const AuthResultSchema = z
+  .object({
+    token: z.string(),
+    customer: PublicCustomerSchema,
+  })
+  .openapi("AuthResult");
+
+export const LoginInputSchema = z
+  .object({
+    identifier: z.string().min(1).openapi({ description: "Phone (E.164) or email" }),
+    password: z.string().min(1),
+  })
+  .openapi("LoginInput");
+
+export const PasswordResetRequestInputSchema = z
+  .object({
+    email: z.string().email(),
+  })
+  .openapi("PasswordResetRequestInput");
+
+export const PasswordResetConfirmInputSchema = z
+  .object({
+    token: z.string().min(1),
+    newPassword: PasswordSchema,
+  })
+  .openapi("PasswordResetConfirmInput");
+
+export const MeResultSchema = z
+  .object({
+    customer: PublicCustomerSchema,
+  })
+  .openapi("MeResult");
+
+export const MessageResultSchema = z
+  .object({
+    message: z.string(),
+  })
+  .openapi("MessageResult");

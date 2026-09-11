@@ -3,22 +3,83 @@ import { withTransaction } from "../db";
 import type { OrderRecord } from "./orders";
 
 /**
- * Everything a route handler needs to persist an order - and nothing about
- * HOW (Postgres, a fake, a future different database). Route handlers
+ * Everything a route handler needs to persist/read orders - and nothing
+ * about HOW (Postgres, a fake, a future different database). Route handlers
  * depend on this interface, never on `pg`/`Pool` directly: the database can
  * be swapped or faked (e.g. an in-memory version for a future test suite)
  * without touching a single route.
  *
- * markEmailSent/markWhatsappSent are separate methods, not one combined
- * markNotificationsSent(orderId, {emailSent, whatsappSent}) - each
- * notification listener (email.ts, whatsapp.ts) now owns recording its own
+ * markEmailSent/markTelegramSent are separate methods, not one combined
+ * markNotificationsSent(orderId, {emailSent, telegramSent}) - each
+ * notification listener (email.ts, telegram.ts) now owns recording its own
  * outcome independently, so adding a third listener never means widening
  * this interface.
  */
 export interface OrdersRepository {
   insertOrder(order: OrderRecord): Promise<void>;
   markEmailSent(orderId: string, sent: boolean): Promise<void>;
-  markWhatsappSent(orderId: string, sent: boolean): Promise<void>;
+  markTelegramSent(orderId: string, sent: boolean): Promise<void>;
+  /** Every order for a given Saturday, items included - used only by the
+   * standalone weekly digest script (scripts/weeklyDigest.ts). */
+  listOrdersForDeliveryDate(deliveryDate: string): Promise<OrderRecord[]>;
+}
+
+type OrderRow = {
+  id: string;
+  created_at: string;
+  delivery_date: string;
+  fulfillment_type: "pickup" | "delivery";
+  address_street: string | null;
+  address_house_number: string | null;
+  address_postal_code: string | null;
+  address_city: string | null;
+  address_lat: number | null;
+  address_lng: number | null;
+  distance_km: number | null;
+  delivery_fee_cents: number;
+  customer_id: string;
+  customer_name: string;
+  customer_email: string;
+  customer_phone: string;
+  notes: string | null;
+  subtotal_cents: number;
+};
+
+type OrderItemRow = {
+  order_id: string;
+  sku: string;
+  name: string;
+  unit_price_cents: number;
+  quantity: number;
+};
+
+function rowToOrder(row: OrderRow, items: OrderRecord["items"]): OrderRecord {
+  return {
+    id: row.id,
+    createdAt: row.created_at,
+    fulfillmentType: row.fulfillment_type,
+    deliveryDate: row.delivery_date,
+    address:
+      row.address_street && row.address_house_number && row.address_postal_code && row.address_city
+        ? {
+            street: row.address_street,
+            houseNumber: row.address_house_number,
+            postalCode: row.address_postal_code,
+            city: row.address_city,
+          }
+        : null,
+    addressLat: row.address_lat,
+    addressLng: row.address_lng,
+    distanceKm: row.distance_km,
+    deliveryFeeCents: row.delivery_fee_cents,
+    customerId: row.customer_id,
+    customerName: row.customer_name,
+    customerEmail: row.customer_email,
+    customerPhone: row.customer_phone,
+    notes: row.notes,
+    subtotalCents: row.subtotal_cents,
+    items,
+  };
 }
 
 async function insertOrder(pool: Pool, order: OrderRecord): Promise<void> {
@@ -28,8 +89,8 @@ async function insertOrder(pool: Pool, order: OrderRecord): Promise<void> {
         (id, created_at, delivery_date, fulfillment_type,
          address_street, address_house_number, address_postal_code, address_city,
          address_lat, address_lng, distance_km, delivery_fee_cents,
-         customer_name, customer_email, customer_phone, notes, subtotal_cents)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
+         customer_id, customer_name, customer_email, customer_phone, notes, subtotal_cents)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
       [
         order.id,
         order.createdAt,
@@ -43,6 +104,7 @@ async function insertOrder(pool: Pool, order: OrderRecord): Promise<void> {
         order.addressLng,
         order.distanceKm,
         order.deliveryFeeCents,
+        order.customerId,
         order.customerName,
         order.customerEmail,
         order.customerPhone,
@@ -61,15 +123,54 @@ async function insertOrder(pool: Pool, order: OrderRecord): Promise<void> {
   });
 }
 
+async function listOrdersForDeliveryDate(pool: Pool, deliveryDate: string): Promise<OrderRecord[]> {
+  const ordersResult = await pool.query<OrderRow>(
+    "SELECT * FROM orders WHERE delivery_date = $1 ORDER BY created_at",
+    [deliveryDate],
+  );
+  if (ordersResult.rows.length === 0) return [];
+
+  const orderIds = ordersResult.rows.map((row) => row.id);
+  const itemsResult = await pool.query<OrderItemRow>(
+    "SELECT * FROM order_items WHERE order_id = ANY($1) ORDER BY order_id, id",
+    [orderIds],
+  );
+
+  const itemsByOrderId = new Map<string, OrderRecord["items"]>();
+  for (const item of itemsResult.rows) {
+    const list = itemsByOrderId.get(item.order_id) ?? [];
+    list.push({
+      sku: item.sku,
+      name: item.name,
+      unitPriceCents: item.unit_price_cents,
+      quantity: item.quantity,
+    });
+    itemsByOrderId.set(item.order_id, list);
+  }
+
+  return ordersResult.rows.map((row) => rowToOrder(row, itemsByOrderId.get(row.id) ?? []));
+}
+
 /** Creates the real, Postgres-backed OrdersRepository. The only place in the
- * app that imports `pg` types directly for writes - everywhere else depends
+ * app that imports `pg` types directly for orders - everywhere else depends
  * on the OrdersRepository interface above. */
 export function createPostgresOrdersRepository(pool: Pool): OrdersRepository {
   return {
     insertOrder: (order) => insertOrder(pool, order),
     markEmailSent: (orderId, sent) =>
-      pool.query("UPDATE orders SET email_sent = $1, updated_at = now() WHERE id = $2", [sent, orderId]).then(() => undefined),
-    markWhatsappSent: (orderId, sent) =>
-      pool.query("UPDATE orders SET whatsapp_sent = $1, updated_at = now() WHERE id = $2", [sent, orderId]).then(() => undefined),
+      pool
+        .query("UPDATE orders SET email_sent = $1, updated_at = now() WHERE id = $2", [
+          sent,
+          orderId,
+        ])
+        .then(() => undefined),
+    markTelegramSent: (orderId, sent) =>
+      pool
+        .query("UPDATE orders SET telegram_sent = $1, updated_at = now() WHERE id = $2", [
+          sent,
+          orderId,
+        ])
+        .then(() => undefined),
+    listOrdersForDeliveryDate: (deliveryDate) => listOrdersForDeliveryDate(pool, deliveryDate),
   };
 }

@@ -68,6 +68,44 @@ export async function sendConfirmationEmail(order: OrderRecord): Promise<boolean
   return true;
 }
 
+/**
+ * Sends a "forgot password" reset link. Unlike sendConfirmationEmail, this
+ * isn't best-effort - a customer resetting a password genuinely needs this
+ * to arrive - so when SMTP isn't configured, it logs the link to the
+ * console and reports success instead of silently failing, matching
+ * sms.ts's identical local-dev fallback for OTP codes (see worker/CLAUDE.md).
+ */
+export async function sendPasswordResetEmail(
+  email: string,
+  name: string,
+  resetUrl: string,
+): Promise<boolean> {
+  if (!config.hostingerSmtpHost || !config.hostingerSmtpUser || !config.hostingerSmtpPass) {
+    console.log(
+      `[dev] HOSTINGER_SMTP_* not configured - password reset link for ${email}: ${resetUrl}`,
+    );
+    return true;
+  }
+
+  await getTransporter().sendMail({
+    from: `"Dhaka Kacchi Berlin" <${config.orderFromEmail}>`,
+    to: `"${name}" <${email}>`,
+    subject: "Reset your password — Dhaka Kacchi Berlin",
+    text: [
+      `Hi ${name},`,
+      "",
+      "We received a request to reset your password. Click the link below to set a new one:",
+      resetUrl,
+      "",
+      "This link expires in 60 minutes. If you didn't request this, you can ignore this email.",
+      "",
+      "Dhaka Kacchi Berlin",
+    ].join("\n"),
+  });
+
+  return true;
+}
+
 /** Wires email sending into the order-created event stream and records the
  * outcome on the order itself. Call once at startup. */
 export function registerEmailNotifications(repository: OrdersRepository): void {

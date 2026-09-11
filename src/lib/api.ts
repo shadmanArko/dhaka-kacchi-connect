@@ -85,9 +85,10 @@ export type OrderInput = {
   deliveryDate: string;
   fulfillmentType: "pickup" | "delivery";
   address?: DeliveryAddressInput;
+  // customerEmail/customerPhone are deliberately absent - every order now
+  // requires a logged-in account, and the server always takes the locked
+  // email/phone from that account (see submitOrder's token param below).
   customerName: string;
-  customerEmail: string;
-  customerPhone: string;
   notes?: string;
 };
 export type OrderResult = {
@@ -100,6 +101,30 @@ export type OrderResult = {
   totalCents: number;
   paymentMethod: "cash_on_delivery";
 };
+
+export type PublicCustomer = {
+  id: string;
+  phone: string;
+  email: string;
+  name: string;
+  dateOfBirth: string;
+  address: DeliveryAddressInput;
+};
+
+export type RegisterInput = {
+  phone: string;
+  name: string;
+  dateOfBirth: string;
+  address: DeliveryAddressInput;
+  email: string;
+  password: string;
+};
+
+export type AuthResult = { token: string; customer: PublicCustomer };
+
+function authHeader(token: string): HeadersInit {
+  return { Authorization: `Bearer ${token}` };
+}
 
 export const api = {
   subscribe: (email: string) =>
@@ -119,9 +144,41 @@ export const api = {
       method: "POST",
       body: JSON.stringify(address),
     }),
-  submitOrder: (order: OrderInput) =>
+  submitOrder: (order: OrderInput, token: string) =>
     apiFetch<OrderResult>("/v1/orders", {
       method: "POST",
+      headers: authHeader(token),
       body: JSON.stringify(order),
+    }),
+
+  // --- Customer accounts ---
+  register: (input: RegisterInput) =>
+    apiFetch<{ phone: string; expiresAt: string; message: string }>("/v1/auth/register", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  verifyOtp: (input: { phone: string; code: string }) =>
+    apiFetch<AuthResult>("/v1/auth/verify-otp", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  login: (input: { identifier: string; password: string }) =>
+    apiFetch<AuthResult>("/v1/auth/login", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  logout: (token: string) =>
+    apiFetch<void>("/v1/auth/logout", { method: "POST", headers: authHeader(token) }),
+  getMe: (token: string) =>
+    apiFetch<{ customer: PublicCustomer }>("/v1/me", { headers: authHeader(token) }),
+  requestPasswordReset: (email: string) =>
+    apiFetch<{ message: string }>("/v1/auth/password-reset/request", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+  confirmPasswordReset: (token: string, newPassword: string) =>
+    apiFetch<{ message: string }>("/v1/auth/password-reset/confirm", {
+      method: "POST",
+      body: JSON.stringify({ token, newPassword }),
     }),
 };

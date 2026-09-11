@@ -1,4 +1,9 @@
-import { forwardRef, type AnchorHTMLAttributes, type ButtonHTMLAttributes, type ReactNode } from "react";
+import {
+  forwardRef,
+  type AnchorHTMLAttributes,
+  type ButtonHTMLAttributes,
+  type ReactNode,
+} from "react";
 import { cn } from "@/lib/utils";
 
 const base =
@@ -8,8 +13,7 @@ const gold =
   "bg-gold text-black-ink px-16 py-[22px] hover:-translate-y-0.5 hover:bg-gold-2 hover:shadow-[0_24px_60px_rgba(200,169,110,.35)]";
 const ghost =
   "border border-gold/40 text-cream px-9 py-[18px] hover:border-gold hover:text-gold hover:-translate-y-0.5";
-const goldSmall =
-  "bg-gold text-black-ink px-12 py-4 hover:-translate-y-0.5 hover:bg-gold-2";
+const goldSmall = "bg-gold text-black-ink px-12 py-4 hover:-translate-y-0.5 hover:bg-gold-2";
 
 type Variant = "gold" | "ghost" | "goldSmall";
 const variants: Record<Variant, string> = { gold, ghost, goldSmall };
