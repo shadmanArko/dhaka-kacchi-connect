@@ -46,7 +46,14 @@ jobs:
       # upstream at https://github.com/TanStack/router/issues/4369), so
       # this builds a real server, fetches every route from it, and saves
       # the rendered HTML as static files instead.
+      #
+      # VITE_API_BASE_URL is baked in at build time (Vite inlines
+      # import.meta.env.VITE_* into the bundle) - without it, src/lib/api.ts
+      # falls back to an empty string and every request silently fails
+      # against the frontend's own domain instead of the real backend.
       - name: Build static site
+        env:
+          VITE_API_BASE_URL: https://api.dhakakacchi.com
         run: bun run build:static
 
       # This Hostinger plan's hPanel only exposes plain FTP (port 21), not
