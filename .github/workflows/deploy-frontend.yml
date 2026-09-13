@@ -52,6 +52,16 @@ jobs:
       # This Hostinger plan's hPanel only exposes plain FTP (port 21), not
       # SFTP - see hPanel > Files > FTP Accounts. Same secret names either
       # way; only `protocol` changes if that plan is ever upgraded to SFTP.
+      #
+      # server-dir is "./", not "./public_html/" - this FTP account
+      # (u669793404.dhakakacchi.com) is a domain-scoped Hostinger account
+      # whose connection root IS ALREADY that domain's public_html. Using
+      # "./public_html/" here created a nested public_html/public_html/
+      # one level below the real docroot, so the live site never actually
+      # updated - confirmed by comparing the real dhakakacchi.com/order
+      # page (still the old WhatsApp-only site) against the file manager's
+      # top-level public_html/ (unchanged) vs. a public_html/public_html/
+      # subfolder that appeared right after a deploy run.
       - name: Deploy to Hostinger over FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
@@ -61,4 +71,4 @@ jobs:
           password: ${{ secrets.HOSTINGER_SFTP_PASSWORD }}
           protocol: ftp
           local-dir: ./dist-static/
-          server-dir: ./public_html/
+          server-dir: ./
