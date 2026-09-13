@@ -35,7 +35,11 @@ import { createPostgresOrdersRepository } from "./lib/ordersRepository";
 import { createPostgresOtpRepository } from "./lib/otpRepository";
 import { createPostgresPasswordResetTokensRepository } from "./lib/passwordResetTokensRepository";
 import { createPostgresSessionsRepository } from "./lib/sessionsRepository";
-import { registerTelegramNotifications } from "./lib/telegram";
+import {
+  handleTelegramWebhookBody,
+  registerTelegramNotifications,
+  secureCompare,
+} from "./lib/telegram";
 import {
   AuthResultSchema,
   DeliveryAddressSchema,
@@ -91,6 +95,52 @@ app.use(
 // (Docker healthchecks, uptime monitors), not API consumers, and it should
 // never break if the API's version ever changes.
 app.get("/health", (c) => c.json({ ok: true }));
+
+// Telegram webhook: send the bot any message from the owner's own chat, get
+// back every upcoming order. Unversioned and outside /v1 like /health above -
+// this is Telegram-to-us infra, not a customer/API-consumer surface, and
+// deliberately never appears in the generated /v1/doc.
+//
+// Disabled (404) unless all three Telegram vars are set - same "optional
+// integration degrades gracefully" rule the outbound alerts already follow.
+// The secret-token header is checked BEFORE the body is ever parsed, both
+// to reject non-Telegram traffic as cheaply as possible and so a malformed
+// body from something that isn't real Telegram never reaches c.req.json().
+//
+// Always responds 200 once past the secret check - Telegram retries a
+// webhook that doesn't get a fast 2xx, and retries here would mean
+// duplicate replies (handleTelegramWebhookBody dedupes by update_id too,
+// but there's no reason to invite retries in the first place). The actual
+// work is intentionally NOT awaited: it's a DB query plus one-or-more
+// outbound Telegram calls (which can be slowed further by rate-limit
+// backoff - see telegram.ts), and responding fast avoids any risk of
+// Telegram's own webhook timeout. The `.catch()` here is not optional -
+// this is a long-lived Node process (not the Cloudflare-Workers-style
+// isolate this app used to run on), so an unhandled rejection would crash
+// the whole process, taking down real order-taking with it.
+app.post("/telegram/webhook", async (c) => {
+  if (!config.telegramBotToken || !config.telegramChatId || !config.telegramWebhookSecret) {
+    return c.json({ ok: false }, 404);
+  }
+
+  const secretHeader = c.req.header("X-Telegram-Bot-Api-Secret-Token") ?? "";
+  if (!secureCompare(secretHeader, config.telegramWebhookSecret)) {
+    return c.json({ ok: false }, 401);
+  }
+
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ ok: true }); // malformed body - nothing Telegram would ever send us
+  }
+
+  handleTelegramWebhookBody(body, ordersRepository).catch((err) => {
+    console.error("Telegram webhook handling failed:", err);
+  });
+
+  return c.json({ ok: true });
+});
 
 const v1 = new OpenAPIHono<{ Variables: AuthVariables }>();
 

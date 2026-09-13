@@ -22,6 +22,10 @@ export interface OrdersRepository {
   /** Every order for a given Saturday, items included - used only by the
    * standalone weekly digest script (scripts/weeklyDigest.ts). */
   listOrdersForDeliveryDate(deliveryDate: string): Promise<OrderRecord[]>;
+  /** Every non-cancelled order with a delivery date on or after `fromDate`
+   * ("YYYY-MM-DD"), items included, ordered by date then creation time - used
+   * by the Telegram "upcoming orders" webhook (telegram.ts). */
+  listOrdersFromDate(fromDate: string): Promise<OrderRecord[]>;
 }
 
 type OrderRow = {
@@ -123,14 +127,13 @@ async function insertOrder(pool: Pool, order: OrderRecord): Promise<void> {
   });
 }
 
-async function listOrdersForDeliveryDate(pool: Pool, deliveryDate: string): Promise<OrderRecord[]> {
-  const ordersResult = await pool.query<OrderRow>(
-    "SELECT * FROM orders WHERE delivery_date = $1 ORDER BY created_at",
-    [deliveryDate],
-  );
-  if (ordersResult.rows.length === 0) return [];
+/** Fetches order_items for a set of order rows and joins them on, grouped by
+ * order id - shared by every "list orders" method below so the join logic
+ * exists exactly once. */
+async function attachItems(pool: Pool, orderRows: OrderRow[]): Promise<OrderRecord[]> {
+  if (orderRows.length === 0) return [];
 
-  const orderIds = ordersResult.rows.map((row) => row.id);
+  const orderIds = orderRows.map((row) => row.id);
   const itemsResult = await pool.query<OrderItemRow>(
     "SELECT * FROM order_items WHERE order_id = ANY($1) ORDER BY order_id, id",
     [orderIds],
@@ -148,7 +151,23 @@ async function listOrdersForDeliveryDate(pool: Pool, deliveryDate: string): Prom
     itemsByOrderId.set(item.order_id, list);
   }
 
-  return ordersResult.rows.map((row) => rowToOrder(row, itemsByOrderId.get(row.id) ?? []));
+  return orderRows.map((row) => rowToOrder(row, itemsByOrderId.get(row.id) ?? []));
+}
+
+async function listOrdersForDeliveryDate(pool: Pool, deliveryDate: string): Promise<OrderRecord[]> {
+  const ordersResult = await pool.query<OrderRow>(
+    "SELECT * FROM orders WHERE delivery_date = $1 ORDER BY created_at",
+    [deliveryDate],
+  );
+  return attachItems(pool, ordersResult.rows);
+}
+
+async function listOrdersFromDate(pool: Pool, fromDate: string): Promise<OrderRecord[]> {
+  const ordersResult = await pool.query<OrderRow>(
+    "SELECT * FROM orders WHERE delivery_date >= $1 AND status != 'cancelled' ORDER BY delivery_date, created_at",
+    [fromDate],
+  );
+  return attachItems(pool, ordersResult.rows);
 }
 
 /** Creates the real, Postgres-backed OrdersRepository. The only place in the
@@ -172,5 +191,6 @@ export function createPostgresOrdersRepository(pool: Pool): OrdersRepository {
         ])
         .then(() => undefined),
     listOrdersForDeliveryDate: (deliveryDate) => listOrdersForDeliveryDate(pool, deliveryDate),
+    listOrdersFromDate: (fromDate) => listOrdersFromDate(pool, fromDate),
   };
 }

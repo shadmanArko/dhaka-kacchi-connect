@@ -85,6 +85,19 @@ export function nextSaturday(now: Date): string {
   return toIsoDate(todayFakeMs + daysUntilSaturday * DAY_MS);
 }
 
+/** Today's date in Berlin, as "YYYY-MM-DD" - same Berlin-wall-clock approach
+ * as nextSaturday/getAvailableDeliveryDates, not a naive UTC slice, so a
+ * "from today forward" query never has an off-by-one day around midnight. */
+export function todayIsoDate(now: Date): string {
+  const nowFakeMs = berlinWallClockFakeMs(now);
+  const todayFakeMs = Date.UTC(
+    new Date(nowFakeMs).getUTCFullYear(),
+    new Date(nowFakeMs).getUTCMonth(),
+    new Date(nowFakeMs).getUTCDate(),
+  );
+  return toIsoDate(todayFakeMs);
+}
+
 /** Validates that `dateStr` (YYYY-MM-DD) is a Saturday whose order cutoff hasn't passed. */
 export function isDeliveryDateStillOrderable(dateStr: string, now: Date): boolean {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);

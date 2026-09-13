@@ -11,6 +11,7 @@
     "start": "node dist/server.js",
     "db:migrate": "tsx scripts/migrate.ts",
     "digest:weekly": "tsx scripts/weeklyDigest.ts",
+    "telegram:set-webhook": "tsx scripts/setTelegramWebhook.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

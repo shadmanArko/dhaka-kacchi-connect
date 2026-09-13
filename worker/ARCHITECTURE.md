@@ -39,6 +39,11 @@ src/lib/orderEvents.ts ──emit──▶ src/lib/email.ts     (sends confirmat
 
 Separately, cron-triggered (NOT event-driven - see below):
 scripts/weeklyDigest.ts ──▶ src/lib/telegram.ts (Friday-evening summary)
+
+The only other direction data flows: Telegram ──▶ this app.
+POST /telegram/webhook (src/index.ts) ──▶ src/lib/telegram.ts
+     handleTelegramWebhookBody() ──▶ ordersRepository.listOrdersFromDate()
+                                 ──▶ sendTelegramMessagesSequentially() ──▶ Telegram
 ```
 
 ## Why it's structured this way
@@ -115,6 +120,21 @@ German postal-code dataset bundled directly into this service
 Google Maps API key, no billing account, no network call, nothing that can
 be "down." A postal code's centroid is precise enough for 5km-wide fee
 bands; see `plzLookup.ts` for the data provenance and validation notes.
+
+**The Telegram webhook always responds `200`, and never awaits its own
+work.** `POST /telegram/webhook` checks the secret header, then fires off
+`handleTelegramWebhookBody(...)` without awaiting it and responds
+immediately — the actual DB query plus one-or-more outbound Telegram calls
+(which can be slowed by rate-limit backoff) never gets a chance to make
+Telegram's own webhook retry logic kick in, which would otherwise mean
+duplicate replies to the owner. Since this fire-and-forget call runs on a
+long-lived Node process (`@hono/node-server`), not a per-request isolate,
+its promise chain must terminate in a `.catch()` that only logs — an
+unhandled rejection here would crash the whole process, taking down order
+creation with it. A module-level "highest `update_id` seen" check adds a
+second layer of duplicate-reply protection for Telegram's own occasional
+redelivery, on top of the fast-200 response minimizing when that happens
+at all.
 
 **Every route is versioned (`/v1`) and schema-typed (`zod`).** This costs
 nothing today and avoids a painful retrofit later, once a real client (a

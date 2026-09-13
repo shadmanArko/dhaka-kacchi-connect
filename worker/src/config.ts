@@ -36,6 +36,12 @@ export type AppConfig = {
   readonly berlinSmsApiKey?: string;
   readonly telegramBotToken?: string;
   readonly telegramChatId?: string;
+  // Verifies an inbound Telegram webhook request actually came from Telegram
+  // (sent back to us as the X-Telegram-Bot-Api-Secret-Token header on every
+  // webhook POST, once set via scripts/setTelegramWebhook.ts) - see
+  // telegram.ts. Optional like the other Telegram vars: unset means the
+  // inbound webhook route is disabled, not that the server fails to start.
+  readonly telegramWebhookSecret?: string;
 };
 
 /** Reads a required var; throws ConfigError with an actionable message if unset. */
@@ -87,6 +93,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     berlinSmsApiKey: optional(env, "BERLIN_SMS_API_KEY"),
     telegramBotToken: optional(env, "TELEGRAM_BOT_TOKEN"),
     telegramChatId: optional(env, "TELEGRAM_CHAT_ID"),
+    telegramWebhookSecret: optional(env, "TELEGRAM_WEBHOOK_SECRET"),
   });
 }
 

@@ -89,6 +89,32 @@ A logged-in customer's email/phone are permanently locked once verified —
 body. Name and address stay editable at checkout, and an edit there writes
 through to the account for next time.
 
+## Telegram: outbound alerts + inbound "upcoming orders" lookup
+
+Outbound (unchanged): a per-order alert the instant one comes in, plus the
+Friday-evening weekly digest script (below). Inbound (new): send the bot
+**any** text message from the owner's own chat, and it replies with every
+non-cancelled order from today forward, grouped by Saturday — see
+`POST /telegram/webhook` in [src/index.ts](./src/index.ts) and
+[src/lib/telegram.ts](./src/lib/telegram.ts).
+
+This needs a third env var beyond `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID`:
+`TELEGRAM_WEBHOOK_SECRET` (any random string, e.g. `openssl rand -hex 32`) —
+Telegram echoes it back on every webhook call as the
+`X-Telegram-Bot-Api-Secret-Token` header, which is how the route tells a
+real Telegram request from anything else. The route 404s until all three
+vars are set.
+
+**One-time setup after setting the env vars** (re-run any time the secret
+rotates — it's idempotent):
+```bash
+npm run telegram:set-webhook
+```
+Verify it took with `GET https://api.telegram.org/bot<token>/getWebhookInfo`
+— this is also the main debugging tool if a message to the bot doesn't get
+a reply, since the webhook route always responds `200` to Telegram (so
+Telegram never retries), meaning failures don't show up any other way.
+
 ## Key files, if you need to go deeper
 
 | File | Owns |
@@ -109,7 +135,8 @@ through to the account for next time.
 | `src/lib/orderEvents.ts` | The "an order was created" event, and who listens |
 | `src/lib/email.ts` | Order-confirmation and password-reset emails |
 | `src/lib/berlinSms.ts` | The one-time OTP text at registration (BerlinSMS's plain SMS API, custom message) |
-| `src/lib/telegram.ts` | The owner's per-order alert (see also `scripts/weeklyDigest.ts`) |
+| `src/lib/telegram.ts` | The owner's per-order alert, plus the inbound `/telegram/webhook` handling (see also `scripts/weeklyDigest.ts`) |
+| `scripts/setTelegramWebhook.ts` | One-time registration of the inbound webhook URL with Telegram |
 | `src/schemas.ts` | Request/response shapes (also generates the OpenAPI doc) |
 | `src/index.ts` | Routes — wires schemas, handlers, and the repositories together |
 | `src/server.ts` | Process entrypoint (starts the HTTP server, handles shutdown) |
