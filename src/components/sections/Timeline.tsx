@@ -16,19 +16,14 @@ export function Timeline() {
         <div
           className="relative pl-12"
           style={{
-            backgroundImage:
-              "linear-gradient(180deg, var(--color-gold) 0%, transparent 100%)",
+            backgroundImage: "linear-gradient(180deg, var(--color-gold) 0%, transparent 100%)",
             backgroundSize: "1px 100%",
             backgroundRepeat: "no-repeat",
             backgroundPosition: "0 0.5rem",
           }}
         >
           {timeline.map((t, i) => (
-            <Reveal
-              key={t.title}
-              delayMs={i * 90}
-              className="relative pl-8 pb-14 last:pb-0"
-            >
+            <Reveal key={t.title} delayMs={i * 90} className="relative pl-8 pb-14 last:pb-0">
               <span
                 aria-hidden
                 className="absolute -left-[45px] top-2 w-2.5 h-2.5 rounded-full bg-gold border-2 border-black-ink"

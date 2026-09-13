@@ -6,7 +6,10 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist", ".output", ".vinxi"] },
+  // Old/ is a frozen archive of the pre-rebuild static site (see root
+  // CLAUDE.md) - dead reference code, never built or shipped, shouldn't be
+  // linted.
+  { ignores: ["dist", ".output", ".vinxi", "Old/**"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],

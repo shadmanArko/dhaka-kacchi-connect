@@ -39,7 +39,9 @@ function HistoryPage() {
       <section className="border-t border-line bg-black-ink py-24 md:py-32 px-6 md:px-14">
         <div className="max-w-[860px] mx-auto space-y-14 [&_h2]:font-serif [&_h2]:font-light [&_h2]:text-cream [&_h2]:text-[clamp(1.8rem,3vw,2.6rem)] [&_h2]:leading-[1.1] [&_h2]:mb-5 [&_h2_em]:not-italic [&_h2_em]:italic [&_h2_em]:text-gold [&_h3]:font-serif [&_h3]:text-gold [&_h3]:text-xl [&_h3]:tracking-wide [&_h3]:mb-3.5 [&_p]:font-sans [&_p]:text-[0.96rem] [&_p]:leading-[2.1] [&_p]:text-[#9a9080] [&_p]:mb-5">
           <Reveal>
-            <h2>Persian <em>Origins</em></h2>
+            <h2>
+              Persian <em>Origins</em>
+            </h2>
             <p>
               The word <em>biriyani</em> descends from the Persian <em>birinj biriyan</em> — "fried
               rice." Long before it reached the subcontinent, layered rice-and-meat dishes were
@@ -49,12 +51,14 @@ function HistoryPage() {
           </Reveal>
 
           <Reveal>
-            <h2>The Mughal <em>Court</em></h2>
+            <h2>
+              The Mughal <em>Court</em>
+            </h2>
             <p>
               Under Mughal emperors, biriyani became a staple of royal kitchens. Each capital
-              developed its own dialect — Delhi, Lucknow, Hyderabad. Two schools emerged: <em>pakki</em>{" "}
-              (cooked meat layered with rice) and <em>kacchi</em> (raw marinated meat sealed with
-              partially-cooked rice and dum-steamed together).
+              developed its own dialect — Delhi, Lucknow, Hyderabad. Two schools emerged:{" "}
+              <em>pakki</em> (cooked meat layered with rice) and <em>kacchi</em> (raw marinated meat
+              sealed with partially-cooked rice and dum-steamed together).
             </p>
             <p>
               Kacchi is the harder discipline. Undercook, and the meat is raw; overcook, and the
@@ -63,7 +67,9 @@ function HistoryPage() {
           </Reveal>
 
           <Reveal>
-            <h2>Kacchi in <em>Old Dhaka</em></h2>
+            <h2>
+              Kacchi in <em>Old Dhaka</em>
+            </h2>
             <p>
               When the tradition reached Bengal, Dhaka's cooks made kacchi their own. Young mutton,
               overnight yoghurt-and-papaya marinade, saffron, kewra, and the signature{" "}
@@ -87,7 +93,9 @@ function HistoryPage() {
           </Reveal>
 
           <Reveal>
-            <h2>Why It <em>Still Matters</em></h2>
+            <h2>
+              Why It <em>Still Matters</em>
+            </h2>
             <p>
               Kacchi is not fast food. It cannot be shortcut. Every step is a decision to honour the
               tradition instead of the clock. That's what we're keeping alive in Berlin — the

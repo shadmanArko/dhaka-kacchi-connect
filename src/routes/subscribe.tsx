@@ -64,8 +64,13 @@ function SubscribePage() {
 
       <section className="border-t border-line bg-deep py-24 md:py-32 px-6 md:px-14 text-center">
         <Reveal className="max-w-[680px] mx-auto">
-          <form onSubmit={onSubmit} className="flex flex-col sm:flex-row gap-0 max-w-[560px] mx-auto">
-            <label htmlFor="email" className="sr-only">Email address</label>
+          <form
+            onSubmit={onSubmit}
+            className="flex flex-col sm:flex-row gap-0 max-w-[560px] mx-auto"
+          >
+            <label htmlFor="email" className="sr-only">
+              Email address
+            </label>
             <input
               id="email"
               type="email"
@@ -90,9 +95,7 @@ function SubscribePage() {
               You're in. Watch your inbox for the next batch.
             </p>
           )}
-          {state === "error" && (
-            <p className="mt-6 font-sans text-sm text-red-400">{message}</p>
-          )}
+          {state === "error" && <p className="mt-6 font-sans text-sm text-red-400">{message}</p>}
 
           <p className="mt-8 font-sans text-[0.68rem] uppercase tracking-[0.25em] text-muted-warm">
             No spam · Unsubscribe anytime

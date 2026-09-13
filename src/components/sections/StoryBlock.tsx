@@ -17,7 +17,16 @@ type Props = {
 };
 
 export function StoryBlock({
-  eyebrow, title, paragraphs, quote, tags, image, badge, reverse, background = "black", children,
+  eyebrow,
+  title,
+  paragraphs,
+  quote,
+  tags,
+  image,
+  badge,
+  reverse,
+  background = "black",
+  children,
 }: Props) {
   return (
     <section
@@ -57,17 +66,16 @@ export function StoryBlock({
           <Eyebrow>{eyebrow}</Eyebrow>
           <SectionTitle className="mb-6">{title}</SectionTitle>
           {paragraphs.map((p, i) => (
-            <p
-              key={i}
-              className="font-sans text-[0.95rem] leading-[2] text-muted-warm mb-5"
-            >
+            <p key={i} className="font-sans text-[0.95rem] leading-[2] text-muted-warm mb-5">
               {p}
             </p>
           ))}
           {quote && <PullQuote>{quote}</PullQuote>}
           {tags && (
             <div className="flex flex-wrap gap-2.5 mt-7">
-              {tags.map((t) => <Tag key={t}>{t}</Tag>)}
+              {tags.map((t) => (
+                <Tag key={t}>{t}</Tag>
+              ))}
             </div>
           )}
           {children}

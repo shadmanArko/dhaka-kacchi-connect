@@ -58,7 +58,9 @@ function AboutPage() {
           "I came to Berlin to pursue my German medical license — juggling the demands of study, a young family, and life in a new country. It's a reality many immigrant families know well: the chaos, the joy, and the deep hunger for something from home.",
           "That something, for me, was kacchi. Real kacchi. The kind you get in Old Dhaka — sealed in a dum pot, fragrant with saffron and kewra, with the whole potato that absorbs everything. I searched all over Berlin. I found nothing even close.",
         ]}
-        quote={'"I searched all over Berlin for real kacchi. I couldn\'t find it. So I made it myself."'}
+        quote={
+          '"I searched all over Berlin for real kacchi. I couldn\'t find it. So I made it myself."'
+        }
         tags={["Bangladesh", "Berlin", "Medical Doctor", "Family Recipe"]}
         image={{ url: kacchi, alt: "Dhaka Kacchi Berlin" }}
         badge={{ value: "Berlin", label: "Germany" }}
@@ -87,7 +89,11 @@ function AboutPage() {
 
       <CardGrid
         eyebrow="What We Stand For"
-        title={<>Our <em>Values</em></>}
+        title={
+          <>
+            Our <em>Values</em>
+          </>
+        }
         cards={values}
       />
 
@@ -107,7 +113,11 @@ function AboutPage() {
 
       <CTASection
         eyebrow="Stay Connected"
-        title={<>Get our <em>latest news</em></>}
+        title={
+          <>
+            Get our <em>latest news</em>
+          </>
+        }
         body="Subscribe to our email list for batch announcements, seasonal menus, exclusive offers, and the stories behind each pot."
         ctaLabel="Subscribe Now"
         ctaTo="/subscribe"
