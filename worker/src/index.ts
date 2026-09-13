@@ -745,7 +745,7 @@ app.doc("/v1/doc", {
   openapi: "3.0.0",
   info: { title: "Dhaka Kacchi Ordering API", version: "1.0.0" },
   servers: [
-    { url: "https://api.dhakakacchi.de/v1", description: "Production" },
+    { url: "https://api.dhakakacchi.com/v1", description: "Production" },
     { url: "http://localhost:8787/v1", description: "Local development" },
   ],
 });

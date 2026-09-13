@@ -1,5 +1,5 @@
-import kacchi from "@/assets/kacchi.jpg.asset.json";
-import borhani from "@/assets/borhani-3-web.jpg.asset.json";
+import kacchi from "@/assets/kacchi.jpg";
+import borhani from "@/assets/borhani-3-web.jpg";
 
 export type Product = {
   number: string;
@@ -22,7 +22,7 @@ export const products: Product[] = [
     description:
       "Raw marinated mutton and long-grain basmati, layered and sealed in a dum pot for 6+ hours. Every grain absorbs the saffron, kewra, and generations of spice knowledge. Includes the signature dum potato — a Dhaka trademark no other city gets right.",
     tags: ["Young Mutton", "Overnight Marinade", "Saffron & Kewra", "Dum Potato", "6+ Hours"],
-    image: { url: kacchi.url, alt: "Kacchi Biriyani — Berlin's authentic slow-cooked mutton biriyani" },
+    image: { url: kacchi, alt: "Kacchi Biriyani — Berlin's authentic slow-cooked mutton biriyani" },
   },
   {
     number: "02",
@@ -33,6 +33,6 @@ export const products: Product[] = [
     description:
       "No kacchi meal in Bangladesh is complete without Borhani. Chilled, spiced yoghurt blended with black salt, mint, coriander, and green chilli — it cuts through the richness of the biriyani perfectly. Ours is made from scratch, the traditional way. Cooling, complex, unlike anything from a bottle.",
     tags: ["Spiced Yoghurt", "Black Salt", "Fresh Mint", "Coriander", "Served Chilled"],
-    image: { url: borhani.url, alt: "Borhani — traditional Bangladeshi spiced yoghurt drink" },
+    image: { url: borhani, alt: "Borhani — traditional Bangladeshi spiced yoghurt drink" },
   },
 ];

@@ -1,0 +1,59 @@
+name: Deploy backend
+
+# Only backend changes trigger this - a frontend-only push never touches
+# the VPS. See deploy-frontend.yml for the mirror-image workflow.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "worker/**"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+
+      - name: Install dependencies
+        working-directory: worker
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: worker
+        run: npm run typecheck
+
+      # Deliberately does NOT run `npm run db:migrate` - schema.sql's
+      # migration drops and recreates tables (see worker/CLAUDE.md), so it
+      # must stay a deliberate, backed-up, human-run step, never automatic.
+      - name: Warn if schema.sql changed
+        run: |
+          if git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -q '^worker/schema\.sql$'; then
+            echo "::warning::worker/schema.sql changed - run the migration manually, with a backup, per worker/CLAUDE.md. This workflow never runs db:migrate automatically."
+          fi
+        continue-on-error: true
+
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            cd /opt/dhaka-kacchi/dhaka-kacchi-connect
+            git pull origin main
+            cd /opt/dhaka-kacchi/dhaka_kacchi_ai_harness/deploy
+            docker compose up -d --build ordering-backend

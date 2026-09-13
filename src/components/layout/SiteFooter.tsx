@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { site } from "@/content/site";
-import logo from "@/assets/logo-nav.png.asset.json";
+import logo from "@/assets/logo-nav.png";
 
 export function SiteFooter() {
   return (
@@ -8,7 +8,7 @@ export function SiteFooter() {
       <div className="flex justify-center md:justify-start">
         <Link to="/" aria-label={`${site.name} — Home`}>
           <img
-            src={logo.url}
+            src={logo}
             alt={site.name}
             className="h-14 w-auto object-contain opacity-85 hover:opacity-100 transition-opacity"
             style={{ filter: "invert(1) sepia(1) saturate(2) hue-rotate(5deg) brightness(1.1)" }}

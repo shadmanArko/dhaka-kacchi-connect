@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { MapPin } from "lucide-react";
 import { AnchorButton } from "@/components/ui/DkButton";
 import { Rings } from "@/components/ui/Rings";
-import kacchi from "@/assets/kacchi.jpg.asset.json";
+import kacchi from "@/assets/kacchi.jpg";
 
 export function Hero() {
   return (
@@ -47,7 +47,7 @@ export function Hero() {
       {/* Right: photo */}
       <div className="relative w-full lg:w-[48%] h-[55vw] min-h-[300px] lg:h-auto lg:min-h-full overflow-hidden shrink-0">
         <img
-          src={kacchi.url}
+          src={kacchi}
           alt="Dhaka Kacchi Biriyani Berlin — authentic slow-cooked kacchi"
           className="absolute inset-0 w-full h-full object-cover object-[center_30%] animate-img-zoom"
           loading="eager"

@@ -9,7 +9,7 @@ import { Timeline } from "@/components/sections/Timeline";
 import { CTASection } from "@/components/sections/CTASection";
 import { SocialSection } from "@/components/sections/SocialSection";
 import { whyUs } from "@/content/whyUs";
-import kacchiBorhani from "@/assets/Kacchi-and-Borhani.png.asset.json";
+import kacchiBorhani from "@/assets/Kacchi-and-Borhani.png";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -62,7 +62,7 @@ function HomePage() {
         ]}
         quote={'"Not a business first — a love of food, heritage, and community."'}
         tags={["Berlin-based", "Family Recipe", "Doctor & Cook", "Made with Love"]}
-        image={{ url: kacchiBorhani.url, alt: "Kacchi and Borhani — Dhaka Kacchi Berlin" }}
+        image={{ url: kacchiBorhani, alt: "Kacchi and Borhani — Dhaka Kacchi Berlin" }}
         badge={{ value: "Berlin", label: "Germany" }}
       />
       <FoodSpotlight />

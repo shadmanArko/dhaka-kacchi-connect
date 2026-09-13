@@ -4,7 +4,7 @@ import { Menu, X } from "lucide-react";
 import { nav, orderCTA, site } from "@/content/site";
 import { useScrolled } from "@/hooks/useScrolled";
 import { cn } from "@/lib/utils";
-import logo from "@/assets/logo-nav.png.asset.json";
+import logo from "@/assets/logo-nav.png";
 
 export function SiteHeader() {
   const scrolled = useScrolled();
@@ -30,7 +30,7 @@ export function SiteHeader() {
       >
         <Link to="/" aria-label={`${site.name} — Home`} className="flex items-center shrink-0">
           <img
-            src={logo.url}
+            src={logo}
             alt={site.name}
             className="h-12 w-auto object-contain"
             style={{ filter: "invert(1) sepia(1) saturate(2) hue-rotate(5deg) brightness(1.1)" }}

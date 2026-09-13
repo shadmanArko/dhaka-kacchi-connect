@@ -6,8 +6,8 @@ import { CTASection } from "@/components/sections/CTASection";
 import { Reveal } from "@/components/ui/Reveal";
 import { Eyebrow } from "@/components/ui/Typography";
 import { values } from "@/content/whyUs";
-import kacchi from "@/assets/kacchi.jpg.asset.json";
-import borhani2 from "@/assets/borhani-2-web.jpg.asset.json";
+import kacchi from "@/assets/kacchi.jpg";
+import borhani2 from "@/assets/borhani-2-web.jpg";
 
 export const Route = createFileRoute("/about")({
   head: () => ({
@@ -60,7 +60,7 @@ function AboutPage() {
         ]}
         quote={'"I searched all over Berlin for real kacchi. I couldn\'t find it. So I made it myself."'}
         tags={["Bangladesh", "Berlin", "Medical Doctor", "Family Recipe"]}
-        image={{ url: kacchi.url, alt: "Dhaka Kacchi Berlin" }}
+        image={{ url: kacchi, alt: "Dhaka Kacchi Berlin" }}
         badge={{ value: "Berlin", label: "Germany" }}
       />
 
@@ -81,7 +81,7 @@ function AboutPage() {
           "The recipe is my family's — unchanged and uncompromised. The same spice balance, the same overnight marinade, the same patience. The only thing new is the city.",
         ]}
         quote={'"Not a business first — a love of food, heritage, and community."'}
-        image={{ url: borhani2.url, alt: "Borhani Berlin" }}
+        image={{ url: borhani2, alt: "Borhani Berlin" }}
         badge={{ value: "400+", label: "Years of Tradition" }}
       />
 

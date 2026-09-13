@@ -1,0 +1,64 @@
+name: Deploy frontend
+
+# Only frontend changes trigger this - worker/** is excluded so a
+# backend-only push never rebuilds/redeploys the site. See
+# deploy-backend.yml for the mirror-image workflow.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "public/**"
+      - "scripts/build-static.mjs"
+      - "vite.config.ts"
+      - "tsconfig*.json"
+      - "package.json"
+      - "bun.lock"
+      - "bunfig.toml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-frontend
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bunx tsc --noEmit
+
+      - name: Lint
+        run: bun run lint
+
+      # Produces dist-static/ - see scripts/build-static.mjs for why this
+      # isn't a plain `vite build`: Nitro's own static-prerender preset is
+      # broken for TanStack Start in this dependency combo (tracked
+      # upstream at https://github.com/TanStack/router/issues/4369), so
+      # this builds a real server, fetches every route from it, and saves
+      # the rendered HTML as static files instead.
+      - name: Build static site
+        run: bun run build:static
+
+      # This Hostinger plan's hPanel only exposes plain FTP (port 21), not
+      # SFTP - see hPanel > Files > FTP Accounts. Same secret names either
+      # way; only `protocol` changes if that plan is ever upgraded to SFTP.
+      - name: Deploy to Hostinger over FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.HOSTINGER_SFTP_HOST }}
+          port: ${{ secrets.HOSTINGER_SFTP_PORT }}
+          username: ${{ secrets.HOSTINGER_SFTP_USERNAME }}
+          password: ${{ secrets.HOSTINGER_SFTP_PASSWORD }}
+          protocol: ftp
+          local-dir: ./dist-static/
+          server-dir: ./public_html/

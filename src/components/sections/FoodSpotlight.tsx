@@ -1,13 +1,13 @@
 import { Reveal } from "@/components/ui/Reveal";
 import { specs } from "@/content/timeline";
-import kacchi from "@/assets/kacchi.jpg.asset.json";
+import kacchi from "@/assets/kacchi.jpg";
 
 export function FoodSpotlight() {
   return (
     <section className="border-t border-line bg-deep">
       <div className="relative h-[70vh] min-h-[480px] overflow-hidden flex items-center justify-center">
         <img
-          src={kacchi.url}
+          src={kacchi}
           alt="Kacchi Biriyani Berlin"
           loading="lazy"
           decoding="async"

@@ -54,7 +54,7 @@ is not yet implemented there.
 Your backend must allow requests from:
 
 - `http://localhost:8080` (local dev)
-- The published domain (`https://dhakakacchi.de` and `https://www.dhakakacchi.de`)
+- The published domain (`https://dhakakacchi.com` and `https://www.dhakakacchi.com`)
 
 Minimum CORS response headers:
 
