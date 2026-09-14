@@ -51,9 +51,17 @@ jobs:
       # import.meta.env.VITE_* into the bundle) - without it, src/lib/api.ts
       # falls back to an empty string and every request silently fails
       # against the frontend's own domain instead of the real backend.
+      #
+      # VITE_POSTHOG_KEY is empty until a PostHog Cloud (EU) project exists
+      # - src/lib/analytics.ts no-ops every call when it's unset, so this
+      # deploys identically to today until it's filled in. Safe to commit in
+      # plaintext once set: a PostHog project key is a publishable client
+      # key, not a secret, same reasoning as VITE_API_BASE_URL above.
       - name: Build static site
         env:
           VITE_API_BASE_URL: https://api.dhakakacchi.com
+          VITE_POSTHOG_KEY: ""
+          VITE_POSTHOG_HOST: https://eu.i.posthog.com
         run: bun run build:static
 
       # This Hostinger plan's hPanel only exposes plain FTP (port 21), not

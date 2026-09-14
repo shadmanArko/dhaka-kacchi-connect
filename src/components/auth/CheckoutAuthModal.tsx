@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/DkButton";
 import { useSession } from "@/hooks/useSession";
 import { api, ApiError } from "@/lib/api";
+import { trackEvent } from "@/lib/analytics";
 
 /**
  * The login/register/OTP pop-up shown when an un-authenticated customer
@@ -75,11 +76,13 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
         password: loginPassword,
       });
       session.login(result.token, result.customer);
+      trackEvent("auth_login_succeeded");
       close();
     } catch (err) {
       setError(
         err instanceof ApiError ? err.message : "Couldn't log in right now. Please try again.",
       );
+      trackEvent("auth_login_failed");
     } finally {
       setBusy(false);
     }
@@ -104,12 +107,14 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
         password,
       });
       setStep("otp");
+      trackEvent("auth_registration_started");
     } catch (err) {
-      setError(
+      const message =
         err instanceof ApiError
           ? err.message
-          : "Couldn't start registration right now. Please try again.",
-      );
+          : "Couldn't start registration right now. Please try again.";
+      setError(message);
+      trackEvent("auth_registration_failed", { error: message });
     } finally {
       setBusy(false);
     }
@@ -122,6 +127,7 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
     try {
       const result = await api.verifyOtp({ phone: phone.trim(), code: code.trim() });
       session.login(result.token, result.customer);
+      trackEvent("auth_otp_verified");
       close();
     } catch (err) {
       setError(
@@ -273,7 +279,7 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
               autoComplete="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              className={inputClass}
+              className={`ph-no-capture ${inputClass}`}
             />
             <input
               type="text"
@@ -298,7 +304,7 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
                 autoComplete="bday"
                 value={dateOfBirth}
                 onChange={(e) => setDateOfBirth(e.target.value)}
-                className={inputClass}
+                className={`ph-no-capture ${inputClass}`}
               />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3">
@@ -309,7 +315,7 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
                 autoComplete="street-address"
                 value={street}
                 onChange={(e) => setStreet(e.target.value)}
-                className={inputClass}
+                className={`ph-no-capture ${inputClass}`}
               />
               <input
                 type="text"
@@ -330,7 +336,7 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
                 autoComplete="postal-code"
                 value={postalCode}
                 onChange={(e) => setPostalCode(e.target.value)}
-                className={inputClass}
+                className={`ph-no-capture ${inputClass}`}
               />
               <input
                 type="text"
@@ -338,7 +344,7 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
                 placeholder="City"
                 value={city}
                 onChange={(e) => setCity(e.target.value)}
-                className={inputClass}
+                className={`ph-no-capture ${inputClass}`}
               />
             </div>
             <input
@@ -348,7 +354,7 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className={inputClass}
+              className={`ph-no-capture ${inputClass}`}
             />
             <input
               type="password"

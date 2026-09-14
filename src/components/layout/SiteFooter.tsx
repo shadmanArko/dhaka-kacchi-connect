@@ -30,6 +30,10 @@ export function SiteFooter() {
         </a>
         <br />
         <span>{site.website} · Berlin</span>
+        <br />
+        <Link to="/privacy" className="text-surface-foreground/60 no-underline hover:underline">
+          Privacy Policy
+        </Link>
       </div>
     </footer>
   );

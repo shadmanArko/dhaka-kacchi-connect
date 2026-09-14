@@ -3,17 +3,20 @@ import {
   Outlet,
   Link,
   createRootRouteWithContext,
+  useLocation,
   useRouter,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { SiteFooter } from "@/components/layout/SiteFooter";
 import { FloatingSocial } from "@/components/layout/FloatingSocial";
+import { ConsentBanner } from "@/components/ConsentBanner";
 import { SessionProvider } from "@/hooks/useSession";
+import { initAnalytics, trackPageview } from "@/lib/analytics";
 
 function NotFoundComponent() {
   return (
@@ -116,14 +119,38 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
+// Fires exactly once per browser session (initAnalytics is idempotent) and
+// once per client-side navigation thereafter - TanStack Router is a client
+// router, so without this a page's $pageview would only ever fire on a
+// real full-page load, undercounting every in-app navigation. Deliberately
+// a useEffect, not a module-level call: effects never run during the
+// server-side prerender pass this app's build relies on (see
+// scripts/build-static.mjs), so PostHog's browser-only SDK never executes
+// in that Node environment.
+function Analytics() {
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    initAnalytics();
+  }, []);
+
+  useEffect(() => {
+    trackPageview();
+  }, [pathname]);
+
+  return null;
+}
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
   return (
     <QueryClientProvider client={queryClient}>
       <SessionProvider>
+        <Analytics />
         <SiteHeader />
         <FloatingSocial />
+        <ConsentBanner />
         <main>
           <Outlet />
         </main>

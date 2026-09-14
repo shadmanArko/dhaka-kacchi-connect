@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { api, ApiError, type PublicCustomer } from "@/lib/api";
 import { getSession, setSession as persistSession, clearSession } from "@/lib/session";
+import { identifyCustomer, resetAnalyticsIdentity } from "@/lib/analytics";
 
 type SessionState = {
   token: string | null;
@@ -38,6 +39,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       .then(({ customer: fresh }) => {
         setCustomer(fresh);
         persistSession(stored.token, fresh);
+        identifyCustomer(fresh.id);
       })
       .catch((err) => {
         if (err instanceof ApiError && err.status === 401) {
@@ -53,6 +55,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     persistSession(newToken, newCustomer);
     setToken(newToken);
     setCustomer(newCustomer);
+    identifyCustomer(newCustomer.id);
   }
 
   function logout() {
@@ -65,6 +68,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     clearSession();
     setToken(null);
     setCustomer(null);
+    resetAnalyticsIdentity();
   }
 
   function updateCustomer(next: PublicCustomer) {

@@ -7,6 +7,7 @@ import { CheckoutAuthModal } from "@/components/auth/CheckoutAuthModal";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useSession } from "@/hooks/useSession";
 import { buildWaLink } from "@/lib/whatsapp";
+import { trackEvent } from "@/lib/analytics";
 import {
   api,
   ApiError,
@@ -100,6 +101,9 @@ function OrderPage() {
   // from, so a fresh login/registration (or restoring a stored session on
   // page load) prefills exactly once, without re-stomping later edits.
   const [prefilledForCustomerId, setPrefilledForCustomerId] = useState<string | null>(null);
+  // Fires once per visit, the moment the cart goes from empty to non-empty -
+  // the top of the order funnel.
+  const [cartStartTracked, setCartStartTracked] = useState(false);
 
   useEffect(() => {
     Promise.all([api.getMenu(), api.getAvailability()])
@@ -140,6 +144,13 @@ function OrderPage() {
   const deliveryFeeCents = quote?.deliverable ? quote.feeCents : 0;
   const totalCents = subtotalCents + deliveryFeeCents;
 
+  useEffect(() => {
+    if (!cartStartTracked && itemCount > 0) {
+      trackEvent("order_cart_started");
+      setCartStartTracked(true);
+    }
+  }, [itemCount, cartStartTracked]);
+
   function setQty(sku: string, qty: number) {
     setQuantities((prev) => ({ ...prev, [sku]: Math.max(0, qty) }));
   }
@@ -155,6 +166,7 @@ function OrderPage() {
   function selectFulfillment(type: FulfillmentType) {
     setFulfillmentType(type);
     resetQuote();
+    trackEvent("order_fulfillment_selected", { fulfillmentType: type });
   }
 
   // Live, as-you-type postal code check - no button. Only fires once the
@@ -183,9 +195,14 @@ function OrderPage() {
         setQuote(q);
         if (q.deliverable) {
           setQuoteState("ready");
+          trackEvent("order_delivery_fee_quoted", {
+            feeCents: q.feeCents,
+            distanceKm: q.distanceKm,
+          });
         } else {
           setQuoteState("error");
           setQuoteError(quoteErrorMessage(q));
+          trackEvent("order_delivery_not_available", { reason: q.reason });
         }
       })
       .catch((err) => {
@@ -221,6 +238,7 @@ function OrderPage() {
 
     if (!session.token || !session.customer) {
       if (!canCheckout) return;
+      trackEvent("order_checkout_clicked");
       setAuthModalOpen(true);
       return;
     }
@@ -253,13 +271,15 @@ function OrderPage() {
       );
       setResult(res);
       setSubmitState("success");
+      trackEvent("order_submitted", { fulfillmentType, totalCents, itemCount });
     } catch (err) {
       setSubmitState("error");
-      setSubmitError(
+      const message =
         err instanceof ApiError
           ? err.message
-          : "Couldn't place your order right now. Please try again, or order via WhatsApp below.",
-      );
+          : "Couldn't place your order right now. Please try again, or order via WhatsApp below.";
+      setSubmitError(message);
+      trackEvent("order_submission_failed", { error: message });
     }
   }
 
@@ -409,7 +429,10 @@ function OrderPage() {
                 <select
                   id="deliveryDate"
                   value={deliveryDate}
-                  onChange={(e) => setDeliveryDate(e.target.value)}
+                  onChange={(e) => {
+                    setDeliveryDate(e.target.value);
+                    trackEvent("order_delivery_date_selected", { date: e.target.value });
+                  }}
                   className={`w-full ${inputClass}`}
                 >
                   {dates.map((d) => (
