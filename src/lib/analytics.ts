@@ -40,7 +40,7 @@ export function initAnalytics(): void {
     // Copy the current dated default from PostHog's own project-creation
     // setup snippet when standing up a new project - this value is
     // versioned by PostHog itself and will drift over time.
-    defaults: "2026-08-29",
+    defaults: "2026-05-30",
     capture_heatmaps: true,
     disable_session_recording: true,
     cookieless_mode: "on_reject",

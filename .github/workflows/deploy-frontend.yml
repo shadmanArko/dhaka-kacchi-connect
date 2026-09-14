@@ -52,15 +52,15 @@ jobs:
       # falls back to an empty string and every request silently fails
       # against the frontend's own domain instead of the real backend.
       #
-      # VITE_POSTHOG_KEY is empty until a PostHog Cloud (EU) project exists
-      # - src/lib/analytics.ts no-ops every call when it's unset, so this
-      # deploys identically to today until it's filled in. Safe to commit in
-      # plaintext once set: a PostHog project key is a publishable client
-      # key, not a secret, same reasoning as VITE_API_BASE_URL above.
+      # VITE_POSTHOG_KEY is safe to commit in plaintext: a PostHog project
+      # token is a publishable client key ("Write-only key for use in
+      # client libraries. Safe to use in public apps." per PostHog's own
+      # settings page), not a secret - same reasoning as VITE_API_BASE_URL
+      # above.
       - name: Build static site
         env:
           VITE_API_BASE_URL: https://api.dhakakacchi.com
-          VITE_POSTHOG_KEY: ""
+          VITE_POSTHOG_KEY: phc_mswvAnS2262YdsUypEMZWiiVDmqZWn4aSV5KSgw3yQip
           VITE_POSTHOG_HOST: https://eu.i.posthog.com
         run: bun run build:static
 
