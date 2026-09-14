@@ -80,6 +80,14 @@ export type DeliveryQuote =
   | { ok: true; deliverable: false; reason: "outside_berlin" | "too_far"; distanceKm: number }
   | { ok: true; deliverable: false; reason: "address_not_found" };
 
+// Lightweight, postal-code-only variant of DeliveryQuote - no
+// lat/lng/resolvedAddress, since checkPostalCode below never collects a
+// full street address. Used for the order page's live-as-you-type check.
+export type PostalCodeCheckResult =
+  | { ok: true; deliverable: true; feeCents: number; distanceKm: number }
+  | { ok: true; deliverable: false; reason: "outside_berlin" | "too_far"; distanceKm: number }
+  | { ok: true; deliverable: false; reason: "address_not_found" };
+
 export type OrderInput = {
   items: OrderItemInput[];
   deliveryDate: string;
@@ -144,6 +152,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify(address),
     }),
+  checkPostalCode: (postalCode: string) =>
+    apiFetch<PostalCodeCheckResult>(
+      `/v1/postal-code-check?postalCode=${encodeURIComponent(postalCode)}`,
+    ),
   submitOrder: (order: OrderInput, token: string) =>
     apiFetch<OrderResult>("/v1/orders", {
       method: "POST",

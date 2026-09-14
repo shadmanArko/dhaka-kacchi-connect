@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/DkButton";
 import { useSession } from "@/hooks/useSession";
-import { api, ApiError, type DeliveryAddressInput } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 
 /**
  * The login/register/OTP pop-up shown when an un-authenticated customer
@@ -24,15 +24,7 @@ const linkClass =
 
 type Step = "start" | "login" | "register" | "otp" | "forgot-password" | "forgot-password-sent";
 
-export function CheckoutAuthModal({
-  open,
-  onClose,
-  prefillAddress,
-}: {
-  open: boolean;
-  onClose: () => void;
-  prefillAddress?: DeliveryAddressInput;
-}) {
+export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const session = useSession();
   const [step, setStep] = useState<Step>("start");
   const [error, setError] = useState("");
@@ -46,10 +38,10 @@ export function CheckoutAuthModal({
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
-  const [street, setStreet] = useState(prefillAddress?.street ?? "");
-  const [houseNumber, setHouseNumber] = useState(prefillAddress?.houseNumber ?? "");
-  const [postalCode, setPostalCode] = useState(prefillAddress?.postalCode ?? "");
-  const [city, setCity] = useState(prefillAddress?.city ?? "Berlin");
+  const [street, setStreet] = useState("");
+  const [houseNumber, setHouseNumber] = useState("");
+  const [postalCode, setPostalCode] = useState("");
+  const [city, setCity] = useState("Berlin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -190,7 +182,15 @@ export function CheckoutAuthModal({
         if (!next) close();
       }}
     >
-      <DialogContent className="bg-black-ink border-line rounded-none sm:rounded-none max-w-md">
+      <DialogContent
+        className="bg-black-ink border-line rounded-none sm:rounded-none max-w-md max-h-[90vh] overflow-y-auto"
+        // Tapping/clicking outside is a common accidental gesture on mobile
+        // (dismissing the keyboard, say) - it shouldn't silently discard a
+        // half-finished login/registration. Only the explicit X button (or
+        // Escape, left untouched for desktop keyboard users) closes this.
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+      >
         {step === "start" && (
           <div className="space-y-6">
             <DialogTitle className="font-serif font-light text-cream text-2xl">
@@ -227,6 +227,7 @@ export function CheckoutAuthModal({
               type="text"
               required
               placeholder="Phone or email"
+              autoComplete="username"
               value={loginIdentifier}
               onChange={(e) => setLoginIdentifier(e.target.value)}
               className={inputClass}
@@ -235,6 +236,7 @@ export function CheckoutAuthModal({
               type="password"
               required
               placeholder="Password"
+              autoComplete="current-password"
               value={loginPassword}
               onChange={(e) => setLoginPassword(e.target.value)}
               className={inputClass}
@@ -266,7 +268,9 @@ export function CheckoutAuthModal({
             <input
               type="tel"
               required
+              inputMode="tel"
               placeholder="Phone number (e.g. +491701234567)"
+              autoComplete="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               className={inputClass}
@@ -275,23 +279,34 @@ export function CheckoutAuthModal({
               type="text"
               required
               placeholder="Full name"
+              autoComplete="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               className={inputClass}
             />
-            <input
-              type="date"
-              required
-              placeholder="Date of birth"
-              value={dateOfBirth}
-              onChange={(e) => setDateOfBirth(e.target.value)}
-              className={inputClass}
-            />
+            <div className="space-y-1.5">
+              <label
+                htmlFor="dateOfBirth"
+                className="block font-sans text-[0.68rem] uppercase tracking-[0.3em] text-gold-3"
+              >
+                Date of birth
+              </label>
+              <input
+                id="dateOfBirth"
+                type="date"
+                required
+                autoComplete="bday"
+                value={dateOfBirth}
+                onChange={(e) => setDateOfBirth(e.target.value)}
+                className={inputClass}
+              />
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3">
               <input
                 type="text"
                 required
                 placeholder="Street"
+                autoComplete="street-address"
                 value={street}
                 onChange={(e) => setStreet(e.target.value)}
                 className={inputClass}
@@ -309,7 +324,10 @@ export function CheckoutAuthModal({
               <input
                 type="text"
                 required
+                inputMode="numeric"
+                maxLength={5}
                 placeholder="Postal code"
+                autoComplete="postal-code"
                 value={postalCode}
                 onChange={(e) => setPostalCode(e.target.value)}
                 className={inputClass}
@@ -327,6 +345,7 @@ export function CheckoutAuthModal({
               type="email"
               required
               placeholder="Email address"
+              autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className={inputClass}
@@ -336,6 +355,7 @@ export function CheckoutAuthModal({
               required
               minLength={8}
               placeholder="Set a password (min. 8 characters)"
+              autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className={inputClass}
@@ -390,6 +410,7 @@ export function CheckoutAuthModal({
               type="email"
               required
               placeholder="Email address"
+              autoComplete="email"
               value={forgotEmail}
               onChange={(e) => setForgotEmail(e.target.value)}
               className={inputClass}

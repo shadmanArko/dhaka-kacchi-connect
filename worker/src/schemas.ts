@@ -54,6 +54,31 @@ export const DeliveryQuoteResponseSchema = z
   .union([DeliveryQuoteDeliverableSchema, DeliveryQuoteNotDeliverableSchema])
   .openapi("DeliveryQuoteResponse");
 
+// Lightweight, postal-code-only variant of the above - used by the order
+// page's live-as-you-type check (no button). No lat/lng/resolvedAddress:
+// those need a full street address, which this endpoint never collects.
+export const PostalCodeCheckQuerySchema = z
+  .object({
+    postalCode: z
+      .string()
+      .regex(/^\d{5}$/, "Postal code must be a 5-digit German PLZ.")
+      .openapi({ example: "10178" }),
+  })
+  .openapi("PostalCodeCheckQuery");
+
+export const PostalCodeCheckDeliverableSchema = z
+  .object({
+    ok: z.literal(true),
+    deliverable: z.literal(true),
+    feeCents: z.number().int(),
+    distanceKm: z.number(),
+  })
+  .openapi("PostalCodeCheckDeliverable");
+
+export const PostalCodeCheckResponseSchema = z
+  .union([PostalCodeCheckDeliverableSchema, DeliveryQuoteNotDeliverableSchema])
+  .openapi("PostalCodeCheckResponse");
+
 export const OrderItemInputSchema = z
   .object({
     sku: z.string().min(1),

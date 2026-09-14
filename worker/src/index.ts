@@ -27,7 +27,7 @@ import { sendOtpSms } from "./lib/berlinSms";
 import { toPublicCustomer, type CustomerRecord } from "./lib/customers";
 import { createPostgresCustomersRepository } from "./lib/customersRepository";
 import { getAvailableDeliveryDates, isDeliveryDateStillOrderable } from "./lib/dates";
-import { quoteDeliveryForAddress } from "./lib/delivery";
+import { checkPostalCode, quoteDeliveryForAddress } from "./lib/delivery";
 import { registerEmailNotifications, sendPasswordResetEmail } from "./lib/email";
 import { emitOrderCreated } from "./lib/orderEvents";
 import { OrderValidationError, priceOrder, type OrderRecord } from "./lib/orders";
@@ -53,6 +53,8 @@ import {
   OrderResultSchema,
   PasswordResetConfirmInputSchema,
   PasswordResetRequestInputSchema,
+  PostalCodeCheckQuerySchema,
+  PostalCodeCheckResponseSchema,
   RegisterInputSchema,
   RegisterResultSchema,
   VerifyOtpInputSchema,
@@ -225,6 +227,40 @@ const deliveryQuoteRoute = createRoute({
 v1.openapi(deliveryQuoteRoute, (c) => {
   const address = c.req.valid("json");
   const result = quoteDeliveryForAddress(address);
+  if (!result.ok) {
+    return c.json({ error: result.reason, message: result.message }, 400);
+  }
+  return c.json(result, 200);
+});
+
+const postalCodeCheckRoute = createRoute({
+  method: "get",
+  path: "/postal-code-check",
+  operationId: "checkPostalCode",
+  summary: "Live-check whether a postal code is deliverable, and at what fee",
+  security: [], // deliberately public - this whole API has no auth today
+  request: { query: PostalCodeCheckQuerySchema },
+  responses: {
+    200: {
+      content: { "application/json": { schema: PostalCodeCheckResponseSchema } },
+      description: "Whether the postal code is deliverable and, if so, at what fee.",
+    },
+    400: {
+      content: { "application/json": { schema: ErrorResponseSchema } },
+      description: "The postal code isn't a valid 5-digit German PLZ.",
+    },
+  },
+});
+// Public, no mutation, postal-code-only - lets the order page show the
+// delivery fee live as the customer types, with no button and without
+// needing the rest of the address yet (see checkPostalCode's own doc
+// comment for why this is a separate endpoint from /delivery-quote rather
+// than a loosened version of it). Deliberately re-run in full by POST
+// /orders at submission time, same as /delivery-quote - never trusted as
+// authorization for the price used when the order is actually placed.
+v1.openapi(postalCodeCheckRoute, (c) => {
+  const { postalCode } = c.req.valid("query");
+  const result = checkPostalCode(postalCode);
   if (!result.ok) {
     return c.json({ error: result.reason, message: result.message }, 400);
   }

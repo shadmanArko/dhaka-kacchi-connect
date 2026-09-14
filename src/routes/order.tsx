@@ -4,9 +4,16 @@ import { MessageCircle } from "lucide-react";
 import { PageHero } from "@/components/sections/PageHero";
 import { Reveal } from "@/components/ui/Reveal";
 import { CheckoutAuthModal } from "@/components/auth/CheckoutAuthModal";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useSession } from "@/hooks/useSession";
 import { buildWaLink } from "@/lib/whatsapp";
-import { api, ApiError, type DeliveryQuote, type MenuItem, type OrderResult } from "@/lib/api";
+import {
+  api,
+  ApiError,
+  type MenuItem,
+  type OrderResult,
+  type PostalCodeCheckResult,
+} from "@/lib/api";
 
 export const Route = createFileRoute("/order")({
   head: () => ({
@@ -47,7 +54,7 @@ function formatDate(iso: string) {
   });
 }
 
-function quoteErrorMessage(quote: DeliveryQuote): string {
+function quoteErrorMessage(quote: PostalCodeCheckResult): string {
   if (quote.deliverable) return "";
   switch (quote.reason) {
     case "address_not_found":
@@ -81,7 +88,7 @@ function OrderPage() {
   const [notes, setNotes] = useState("");
 
   const [quoteState, setQuoteState] = useState<QuoteState>("idle");
-  const [quote, setQuote] = useState<DeliveryQuote | null>(null);
+  const [quote, setQuote] = useState<PostalCodeCheckResult | null>(null);
   const [quoteError, setQuoteError] = useState("");
 
   const [submitState, setSubmitState] = useState<SubmitState>("idle");
@@ -107,8 +114,9 @@ function OrderPage() {
 
   // Fills in name/address from the account the moment a session exists -
   // whether that's a fresh login/registration just now, or a stored session
-  // restored on page load. Editable afterwards; see checkAddress's own
-  // invalidation below for why editing an address doesn't re-run this.
+  // restored on page load. Editable afterwards; the live postal-code check
+  // below re-validates independently as soon as it's edited, so this effect
+  // never needs to re-run just because the address changed.
   useEffect(() => {
     if (session.customer && session.customer.id !== prefilledForCustomerId) {
       setCustomerName(session.customer.name);
@@ -149,57 +157,74 @@ function OrderPage() {
     resetQuote();
   }
 
-  async function checkAddress() {
-    if (!street.trim() || !houseNumber.trim() || !postalCode.trim() || !city.trim()) {
-      setQuoteState("error");
-      setQuoteError("Please fill in street, house number, postal code, and city.");
+  // Live, as-you-type postal code check - no button. Only fires once the
+  // (debounced) value is a complete 5-digit PLZ; anything shorter just goes
+  // back to idle rather than showing a premature "not deliverable" error.
+  // Deliverability/fee is entirely postal-code-derived server-side (see
+  // worker/src/lib/delivery.ts), so this never needs street/house number/
+  // city to give a real answer - those are only required at final submit,
+  // for the courier.
+  const debouncedPostalCode = useDebouncedValue(postalCode.trim(), 400);
+
+  useEffect(() => {
+    if (fulfillmentType !== "delivery") return;
+    if (!/^\d{5}$/.test(debouncedPostalCode)) {
+      resetQuote();
       return;
     }
+
+    let cancelled = false;
     setQuoteState("checking");
     setQuoteError("");
-    try {
-      const q = await api.quoteDelivery({
-        street: street.trim(),
-        houseNumber: houseNumber.trim(),
-        postalCode: postalCode.trim(),
-        city: city.trim(),
-      });
-      setQuote(q);
-      if (q.deliverable) {
-        setQuoteState("ready");
-      } else {
+    api
+      .checkPostalCode(debouncedPostalCode)
+      .then((q) => {
+        if (cancelled) return;
+        setQuote(q);
+        if (q.deliverable) {
+          setQuoteState("ready");
+        } else {
+          setQuoteState("error");
+          setQuoteError(quoteErrorMessage(q));
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return;
         setQuoteState("error");
-        setQuoteError(quoteErrorMessage(q));
-      }
-    } catch (err) {
-      setQuoteState("error");
-      setQuoteError(
-        err instanceof ApiError
-          ? err.message
-          : "Couldn't check that address right now. Please try again.",
-      );
-    }
-  }
+        setQuoteError(
+          err instanceof ApiError
+            ? err.message
+            : "Couldn't check that postal code right now. Please try again.",
+        );
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedPostalCode, fulfillmentType]);
 
-  // Everything needed before an account is involved - items, a date, and
-  // (for delivery) a confirmed quote. Checkout requires all of this to open
-  // the login/register pop-up at all.
-  const canCheckout =
-    itemCount > 0 &&
-    !!deliveryDate &&
-    (fulfillmentType === "pickup" || (quoteState === "ready" && quote?.deliverable === true));
+  // Everything needed before an account is involved - just items and a
+  // date. Fulfillment/address only exist once logged in (see the JSX
+  // below), so they can't gate opening the login/register pop-up.
+  const canCheckout = itemCount > 0 && !!deliveryDate;
+  const fulfillmentReady =
+    fulfillmentType === "pickup" || (quoteState === "ready" && quote?.deliverable === true);
   const canSubmit =
-    canCheckout && !!session.customer && customerName.trim().length > 0 && !session.isLoading;
+    canCheckout &&
+    fulfillmentReady &&
+    !!session.customer &&
+    customerName.trim().length > 0 &&
+    !session.isLoading;
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!canCheckout || session.isLoading) return;
+    if (session.isLoading) return;
 
     if (!session.token || !session.customer) {
+      if (!canCheckout) return;
       setAuthModalOpen(true);
       return;
     }
-    if (!customerName.trim()) return;
+    if (!canSubmit) return;
 
     setSubmitState("submitting");
     setSubmitError("");
@@ -395,153 +420,159 @@ function OrderPage() {
                 </select>
               </fieldset>
 
-              <fieldset className="space-y-4">
-                <legend className="font-sans text-[0.68rem] uppercase tracking-[0.3em] text-gold-3 mb-2">
-                  Pickup or Delivery
-                </legend>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <button
-                    type="button"
-                    aria-pressed={fulfillmentType === "pickup"}
-                    onClick={() => selectFulfillment("pickup")}
-                    className={`text-left px-6 py-5 border transition-colors ${
-                      fulfillmentType === "pickup"
-                        ? "border-gold bg-gold/10"
-                        : "border-line hover:border-gold/40"
-                    }`}
-                  >
-                    <strong className="block font-serif font-normal text-cream text-lg">
-                      Free Pickup
-                    </strong>
-                    <span className="block font-sans text-[0.82rem] text-muted-warm mt-1">
-                      {PICKUP_LABEL}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    aria-pressed={fulfillmentType === "delivery"}
-                    onClick={() => selectFulfillment("delivery")}
-                    className={`text-left px-6 py-5 border transition-colors ${
-                      fulfillmentType === "delivery"
-                        ? "border-gold bg-gold/10"
-                        : "border-line hover:border-gold/40"
-                    }`}
-                  >
-                    <strong className="block font-serif font-normal text-cream text-lg">
-                      Home Delivery
-                    </strong>
-                    <span className="block font-sans text-[0.82rem] text-muted-warm mt-1">
-                      Berlin only, from €5
-                    </span>
-                  </button>
-                </div>
-
-                {fulfillmentType === "delivery" && (
-                  <div className="space-y-4 pt-2">
-                    <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-4">
-                      <input
-                        type="text"
-                        placeholder="Street"
-                        value={street}
-                        onChange={(e) => {
-                          setStreet(e.target.value);
-                          resetQuote();
-                        }}
-                        className={inputClass}
-                      />
-                      <input
-                        type="text"
-                        placeholder="No."
-                        value={houseNumber}
-                        onChange={(e) => {
-                          setHouseNumber(e.target.value);
-                          resetQuote();
-                        }}
-                        className={`sm:w-24 ${inputClass}`}
-                      />
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <input
-                        type="text"
-                        placeholder="Postal code"
-                        value={postalCode}
-                        onChange={(e) => {
-                          setPostalCode(e.target.value);
-                          resetQuote();
-                        }}
-                        className={inputClass}
-                      />
-                      <input
-                        type="text"
-                        placeholder="City"
-                        value={city}
-                        onChange={(e) => {
-                          setCity(e.target.value);
-                          resetQuote();
-                        }}
-                        className={inputClass}
-                      />
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={checkAddress}
-                      disabled={quoteState === "checking"}
-                      className="w-full sm:w-auto px-9 py-4 border border-gold/40 text-cream font-sans text-[0.8rem] uppercase tracking-[0.25em] hover:border-gold hover:text-gold transition-colors disabled:opacity-50"
-                    >
-                      {quoteState === "checking" ? "Checking…" : "Check address & delivery fee"}
-                    </button>
-
-                    {quoteState === "ready" && quote?.deliverable && (
-                      <p className="font-sans text-[0.85rem] text-gold">
-                        {quote.distanceKm.toFixed(1)}km away — delivery fee{" "}
-                        {formatEuro(quote.feeCents)}
-                      </p>
-                    )}
-                    {quoteState === "error" && (
-                      <p className="font-sans text-[0.85rem] text-red-400">{quoteError}</p>
-                    )}
-                  </div>
-                )}
-              </fieldset>
-
               {session.customer ? (
-                <fieldset className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <input
-                    type="text"
-                    required
-                    placeholder="Full name"
-                    value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    className={inputClass}
-                  />
-                  <input
-                    type="tel"
-                    disabled
-                    readOnly
-                    value={session.customer.phone}
-                    title="Phone is locked to your account"
-                    className={lockedInputClass}
-                  />
-                  <input
-                    type="email"
-                    disabled
-                    readOnly
-                    value={session.customer.email}
-                    title="Email is locked to your account"
-                    className={`sm:col-span-2 ${lockedInputClass}`}
-                  />
-                  <textarea
-                    placeholder="Notes (optional)"
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    rows={3}
-                    className={`sm:col-span-2 resize-none ${inputClass}`}
-                  />
-                </fieldset>
+                <>
+                  <fieldset className="space-y-4">
+                    <legend className="font-sans text-[0.68rem] uppercase tracking-[0.3em] text-gold-3 mb-2">
+                      Pickup or Delivery
+                    </legend>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <button
+                        type="button"
+                        aria-pressed={fulfillmentType === "pickup"}
+                        onClick={() => selectFulfillment("pickup")}
+                        className={`text-left px-6 py-5 border transition-colors ${
+                          fulfillmentType === "pickup"
+                            ? "border-gold bg-gold/10"
+                            : "border-line hover:border-gold/40"
+                        }`}
+                      >
+                        <strong className="block font-serif font-normal text-cream text-lg">
+                          Free Pickup
+                        </strong>
+                        <span className="block font-sans text-[0.82rem] text-muted-warm mt-1">
+                          {PICKUP_LABEL}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        aria-pressed={fulfillmentType === "delivery"}
+                        onClick={() => selectFulfillment("delivery")}
+                        className={`text-left px-6 py-5 border transition-colors ${
+                          fulfillmentType === "delivery"
+                            ? "border-gold bg-gold/10"
+                            : "border-line hover:border-gold/40"
+                        }`}
+                      >
+                        <strong className="block font-serif font-normal text-cream text-lg">
+                          Home Delivery
+                        </strong>
+                        <span className="block font-sans text-[0.82rem] text-muted-warm mt-1">
+                          Berlin only, from €5
+                        </span>
+                      </button>
+                    </div>
+
+                    {fulfillmentType === "delivery" && (
+                      <div className="space-y-4 pt-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-4">
+                          <input
+                            type="text"
+                            placeholder="Street"
+                            autoComplete="street-address"
+                            value={street}
+                            onChange={(e) => {
+                              setStreet(e.target.value);
+                              resetQuote();
+                            }}
+                            className={inputClass}
+                          />
+                          <input
+                            type="text"
+                            placeholder="No."
+                            value={houseNumber}
+                            onChange={(e) => {
+                              setHouseNumber(e.target.value);
+                              resetQuote();
+                            }}
+                            className={`sm:w-24 ${inputClass}`}
+                          />
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            maxLength={5}
+                            placeholder="Postal code"
+                            autoComplete="postal-code"
+                            value={postalCode}
+                            onChange={(e) => {
+                              // Invalidate any stale quote immediately, not
+                              // just once the debounced re-check fires below
+                              // - otherwise a "ready" quote for the OLD
+                              // postal code could still gate the submit
+                              // button for the ~400ms before it settles.
+                              setPostalCode(e.target.value);
+                              resetQuote();
+                            }}
+                            className={inputClass}
+                          />
+                          <input
+                            type="text"
+                            placeholder="City"
+                            value={city}
+                            onChange={(e) => setCity(e.target.value)}
+                            className={inputClass}
+                          />
+                        </div>
+
+                        {quoteState === "checking" && (
+                          <p className="font-sans text-[0.85rem] text-muted-warm">
+                            Checking that postal code…
+                          </p>
+                        )}
+                        {quoteState === "ready" && quote?.deliverable && (
+                          <p className="font-sans text-[0.85rem] text-gold">
+                            {quote.distanceKm.toFixed(1)}km away — delivery fee{" "}
+                            {formatEuro(quote.feeCents)}
+                          </p>
+                        )}
+                        {quoteState === "error" && (
+                          <p className="font-sans text-[0.85rem] text-red-400">{quoteError}</p>
+                        )}
+                      </div>
+                    )}
+                  </fieldset>
+
+                  <fieldset className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <input
+                      type="text"
+                      required
+                      placeholder="Full name"
+                      autoComplete="name"
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      className={inputClass}
+                    />
+                    <input
+                      type="tel"
+                      disabled
+                      readOnly
+                      value={session.customer.phone}
+                      title="Phone is locked to your account"
+                      className={lockedInputClass}
+                    />
+                    <input
+                      type="email"
+                      disabled
+                      readOnly
+                      value={session.customer.email}
+                      title="Email is locked to your account"
+                      className={`sm:col-span-2 ${lockedInputClass}`}
+                    />
+                    <textarea
+                      placeholder="Notes (optional)"
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      rows={3}
+                      className={`sm:col-span-2 resize-none ${inputClass}`}
+                    />
+                  </fieldset>
+                </>
               ) : (
                 <p className="font-sans text-[0.85rem] text-muted-warm">
-                  You'll log in or create an account at checkout to finish your order.
+                  You'll log in or create an account at checkout to choose pickup or delivery and
+                  finish your order.
                 </p>
               )}
 
@@ -576,13 +607,7 @@ function OrderPage() {
         </Reveal>
       </section>
 
-      <CheckoutAuthModal
-        open={authModalOpen}
-        onClose={() => setAuthModalOpen(false)}
-        prefillAddress={
-          fulfillmentType === "delivery" ? { street, houseNumber, postalCode, city } : undefined
-        }
-      />
+      <CheckoutAuthModal open={authModalOpen} onClose={() => setAuthModalOpen(false)} />
     </>
   );
 }
