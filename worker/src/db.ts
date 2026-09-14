@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/node";
 import { Pool, type PoolClient } from "pg";
 import { config } from "./config";
 
@@ -6,6 +7,7 @@ export const pool = new Pool({ connectionString: config.databaseUrl });
 pool.on("error", (err) => {
   // An idle client dying in the background (e.g. Postgres restarting) must
   // not crash the whole process via an unhandled 'error' event.
+  Sentry.captureException(err);
   console.error("Unexpected error on idle Postgres client:", err);
 });
 

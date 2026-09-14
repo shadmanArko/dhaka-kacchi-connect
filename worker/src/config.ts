@@ -42,6 +42,14 @@ export type AppConfig = {
   // telegram.ts. Optional like the other Telegram vars: unset means the
   // inbound webhook route is disabled, not that the server fails to start.
   readonly telegramWebhookSecret?: string;
+  // Sentry error tracking - see src/instrument.ts. Optional like the other
+  // integrations: unset means Sentry.init() never runs and the app behaves
+  // exactly as it did before this was added.
+  readonly sentryDsn?: string;
+  // Tags every captured event so Sentry's dashboard can separate a local
+  // dev exception from a real production one. Defaults to "development";
+  // set to "production" in deploy/.env.
+  readonly sentryEnvironment: string;
 };
 
 /** Reads a required var; throws ConfigError with an actionable message if unset. */
@@ -94,6 +102,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     telegramBotToken: optional(env, "TELEGRAM_BOT_TOKEN"),
     telegramChatId: optional(env, "TELEGRAM_CHAT_ID"),
     telegramWebhookSecret: optional(env, "TELEGRAM_WEBHOOK_SECRET"),
+    sentryDsn: optional(env, "SENTRY_DSN"),
+    sentryEnvironment: optional(env, "SENTRY_ENVIRONMENT") ?? "development",
   });
 }
 

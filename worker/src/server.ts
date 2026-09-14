@@ -1,3 +1,5 @@
+import "./instrument"; // must run before every other import - see instrument.ts
+
 import { serve } from "@hono/node-server";
 import app from "./index";
 import { config } from "./config";

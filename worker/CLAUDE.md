@@ -115,6 +115,40 @@ Verify it took with `GET https://api.telegram.org/bot<token>/getWebhookInfo`
 a reply, since the webhook route always responds `200` to Telegram (so
 Telegram never retries), meaning failures don't show up any other way.
 
+## Error tracking (Sentry)
+
+`SENTRY_DSN` unset means Sentry never initializes and nothing changes —
+same "optional integration degrades gracefully" rule as SMTP/BerlinSMS/
+Telegram. Set it and you get, with zero other code:
+
+- Every uncaught exception and unhandled promise rejection process-wide,
+  reported before the process exits (Sentry's default integrations include
+  `OnUncaughtException`/`OnUnhandledRejection`) — this matters specifically
+  because this is a long-lived Node process (see `src/server.ts`), not the
+  Cloudflare Workers isolate this app used to run on, where one of these
+  used to just be a silently dead process.
+- Any error that reaches Hono's `app.onError` in `src/index.ts` — i.e.
+  anything thrown in a route handler and not caught locally.
+- Everything explicitly passed to `Sentry.captureException(err)` in the
+  handful of `.catch()` blocks that were already swallowing errors on
+  purpose to protect a more important flow (the Telegram webhook handler,
+  `sendPasswordResetEmail`, `sendConfirmationEmail`, `sendTelegramOrderAlert`,
+  the Postgres pool's idle-client `error` event) — these already logged to
+  `console.error`; Sentry adds an actual alert instead of only showing up in
+  `docker compose logs`.
+
+**`src/instrument.ts` must stay the very first import in `src/server.ts`**,
+before `@hono/node-server` — Sentry's Node SDK auto-instruments modules
+(`http`, `pg`, ...) as they're `require()`'d, which only works if
+`Sentry.init()` runs before those modules are first loaded anywhere.
+
+Deliberately **not** using `@sentry/hono` (an alpha package as of writing)
+or `@sentry/node`'s own `honoIntegration`/`setupHonoErrorHandler`
+(deprecated in favor of that alpha package) — plain `@sentry/node` plus
+Hono's native `app.onError()` gets the same error capture without
+depending on either. Also deliberately no `tracesSampleRate` — this is
+scoped to error tracking, not full APM/tracing.
+
 ## Key files, if you need to go deeper
 
 | File | Owns |
@@ -140,6 +174,7 @@ Telegram never retries), meaning failures don't show up any other way.
 | `src/schemas.ts` | Request/response shapes (also generates the OpenAPI doc) |
 | `src/index.ts` | Routes — wires schemas, handlers, and the repositories together |
 | `src/server.ts` | Process entrypoint (starts the HTTP server, handles shutdown) |
+| `src/instrument.ts` | Sentry.init() — must stay the first import in `src/server.ts` |
 | `scripts/weeklyDigest.ts` | Friday-evening Telegram summary of the week's orders (cron-triggered, see below) |
 
 ## Deploying

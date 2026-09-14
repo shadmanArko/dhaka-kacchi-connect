@@ -1,5 +1,6 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { cors } from "hono/cors";
+import * as Sentry from "@sentry/node";
 import { config } from "./config";
 import { pool, isUniqueViolation } from "./db";
 import { MENU } from "./data";
@@ -93,6 +94,16 @@ app.use(
   }),
 );
 
+// Anything thrown inside a route handler and not caught locally lands here
+// instead of Hono's default bare 500 - reported to Sentry (no-ops if
+// SENTRY_DSN isn't set, see instrument.ts) so a real bug in, say, an order
+// submission is something we find out about instead of only the customer.
+app.onError((err, c) => {
+  Sentry.captureException(err);
+  console.error("Unhandled error:", err);
+  return c.json({ error: "internal_error", message: "Something went wrong. Please try again." }, 500);
+});
+
 // Health check stays unversioned and outside /v1 - it's for infra probes
 // (Docker healthchecks, uptime monitors), not API consumers, and it should
 // never break if the API's version ever changes.
@@ -138,6 +149,7 @@ app.post("/telegram/webhook", async (c) => {
   }
 
   handleTelegramWebhookBody(body, ordersRepository).catch((err) => {
+    Sentry.captureException(err);
     console.error("Telegram webhook handling failed:", err);
   });
 
@@ -630,6 +642,7 @@ v1.openapi(passwordResetRequestRoute, async (c) => {
 
   const resetUrl = `${config.publicSiteUrl}/reset-password?token=${encodeURIComponent(token)}`;
   await sendPasswordResetEmail(customer.email, customer.name, resetUrl).catch((err) => {
+    Sentry.captureException(err);
     console.error("sendPasswordResetEmail failed:", err);
   });
 

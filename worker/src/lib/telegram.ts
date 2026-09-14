@@ -1,4 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
+import * as Sentry from "@sentry/node";
 import { z } from "zod";
 import { config } from "../config";
 import { KITCHEN_LOCATION } from "../data";
@@ -71,6 +72,7 @@ export function sendTelegramOrderAlert(order: OrderRecord): Promise<boolean> {
 export function registerTelegramNotifications(repository: OrdersRepository): void {
   onOrderCreated(async ({ order }) => {
     const sent = await sendTelegramOrderAlert(order).catch((err) => {
+      Sentry.captureException(err);
       console.error("sendTelegramOrderAlert failed:", err);
       return false;
     });

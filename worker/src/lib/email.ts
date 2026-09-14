@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/node";
 import nodemailer, { type Transporter } from "nodemailer";
 import { config } from "../config";
 import { KITCHEN_LOCATION } from "../data";
@@ -111,6 +112,7 @@ export async function sendPasswordResetEmail(
 export function registerEmailNotifications(repository: OrdersRepository): void {
   onOrderCreated(async ({ order }) => {
     const sent = await sendConfirmationEmail(order).catch((err) => {
+      Sentry.captureException(err);
       console.error("sendConfirmationEmail failed:", err);
       return false;
     });
