@@ -97,9 +97,46 @@ jobs:
           fi
           echo "no source maps in dist-static/ - safe to deploy"
 
+      # The rollback mechanism, and the only one there is.
+      #
+      # The FTP step below overwrites the live docroot in place: there is no
+      # previous version on the server afterwards, and `dist-static/` is a
+      # prerender of whatever the repo looked like at that commit, so it
+      # cannot be reproduced later by checking the commit out again once a
+      # dependency has moved. Keeping the exact uploaded bytes is what makes
+      # "put yesterday's site back" a five-minute job instead of a rebuild
+      # and a guess.
+      #
+      # This runs BEFORE the transfer on purpose - a deploy that dies halfway
+      # through the upload is precisely when the last-good bundle is needed,
+      # so the artifact must already exist by then.
+      #
+      # To roll back: open the last known-good run of this workflow, download
+      # its `dist-static` artifact, unzip it, and upload the contents to the
+      # same server-dir with any FTP client. 30 days covers the window in
+      # which anyone would still want the old site; past that, rebuild.
+      - name: Archive the deployed bundle for rollback
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-static
+          path: dist-static/
+          retention-days: 30
+          if-no-files-found: error
+
       # This Hostinger plan's hPanel only exposes plain FTP (port 21), not
       # SFTP - see hPanel > Files > FTP Accounts. Same secret names either
       # way; only `protocol` changes if that plan is ever upgraded to SFTP.
+      #
+      # The server DOES accept explicit FTPS - `AUTH TLS` returns 234 and
+      # negotiates TLS 1.3 - so `protocol: ftps` would stop this password
+      # crossing the internet in cleartext on every deploy. It is NOT
+      # switched here because the server's certificate is Hostinger's shared
+      # one (CN=hostinger.com, SAN *.hostinger.com and siblings) and does not
+      # cover `ftp.dhakakacchi.com`: flipping this while HOSTINGER_SFTP_HOST
+      # holds a dhakakacchi.com name or a bare IP fails hostname
+      # verification and breaks the deploy. Check what that secret holds
+      # first; if it is a *.hostinger.com host, `ftps` is a safe one-word
+      # change.
       #
       # server-dir is "./", not "./public_html/" - this FTP account
       # (u669793404.dhakakacchi.com) is a domain-scoped Hostinger account

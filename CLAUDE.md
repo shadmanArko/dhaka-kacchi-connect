@@ -229,8 +229,20 @@ Prefers plain, concrete explanations and simple working solutions over clever on
     warning if unset, so this doesn't block launch).
   - Twilio account + WhatsApp sender not yet set up (same graceful no-op
     behavior via `sendWhatsAppAlert`).
-  - No CI/CD yet for the frontend (Hostinger SFTP via GitHub Actions) or an
-    automated deploy for `worker/` to the VPS — both still manual for now.
+  - ~~No CI/CD yet~~ — both pipelines exist now.
+    `.github/workflows/deploy-frontend.yml` runs typecheck → lint → test →
+    prerender → refuse-if-source-maps → archive the bundle for rollback →
+    FTP to Hostinger; `deploy-backend.yml` runs typecheck → test → SSH +
+    `docker compose up -d --build`. Path filters keep them independent, so a
+    backend-only push never rebuilds the site.
+    **Still open:** the frontend transfer is plain FTP, so that password
+    crosses the internet in cleartext on every deploy. The server does accept
+    explicit FTPS (`AUTH TLS` → 234, TLS 1.3), but it presents Hostinger's
+    shared certificate (`CN=hostinger.com`, SAN `*.hostinger.com` and
+    siblings), which does not cover `ftp.dhakakacchi.com` — so
+    `protocol: ftps` is safe only if `HOSTINGER_SFTP_HOST` holds a
+    `*.hostinger.com` name rather than a dhakakacchi.com name or a bare IP.
+    Full reasoning sits beside the FTP step in the workflow.
   - ERP integration details — deferred, Arko to scope later.
   - Whether a separate admin dashboard is wanted (orders, subscribers, batches).
   - Timeline/scope for the chatbot or agentic AI integration mentioned as a later phase.
