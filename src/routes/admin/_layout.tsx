@@ -5,6 +5,15 @@ import { Toaster } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/admin/_layout")({
+  // Keeps /admin, /admin/login and /admin/orders/new out of Google in one
+  // place - this is a pathless layout, so it's a match on all three, and the
+  // leaf routes only set `title` (handled by a separate branch of the head
+  // merge), so nothing can shadow this. Deliberately a meta tag rather than a
+  // robots.txt Disallow: a Disallow would stop Google fetching the page and
+  // therefore stop it ever reading this tag.
+  head: () => ({
+    meta: [{ name: "robots", content: "noindex, nofollow" }],
+  }),
   component: AdminLayoutRoute,
 });
 

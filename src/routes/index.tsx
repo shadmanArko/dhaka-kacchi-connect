@@ -9,6 +9,7 @@ import { Timeline } from "@/components/sections/Timeline";
 import { CTASection } from "@/components/sections/CTASection";
 import { SocialSection } from "@/components/sections/SocialSection";
 import { whyUs } from "@/content/whyUs";
+import { canonical } from "@/lib/seo";
 import kacchiBorhani from "@/assets/Kacchi-and-Borhani.png";
 
 export const Route = createFileRoute("/")({
@@ -25,7 +26,9 @@ export const Route = createFileRoute("/")({
         property: "og:description",
         content: "Authentic Kacchi Biriyani & Borhani, made in Berlin.",
       },
+      { property: "og:url", content: canonical("/") },
     ],
+    links: [{ rel: "canonical", href: canonical("/") }],
   }),
   component: HomePage,
 });

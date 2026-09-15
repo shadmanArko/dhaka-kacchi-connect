@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageHero } from "@/components/sections/PageHero";
 import { Reveal } from "@/components/ui/Reveal";
+import { canonical } from "@/lib/seo";
 
 export const Route = createFileRoute("/history")({
   head: () => ({
@@ -16,7 +17,9 @@ export const Route = createFileRoute("/history")({
         property: "og:description",
         content: "From Mughal royal kitchens to the streets of Old Dhaka.",
       },
+      { property: "og:url", content: canonical("/history") },
     ],
+    links: [{ rel: "canonical", href: canonical("/history") }],
   }),
   component: HistoryPage,
 });

@@ -3,7 +3,7 @@ import { MapPin, Check, Clock, Utensils } from "lucide-react";
 const items = [
   { Icon: MapPin, label: "Berlin, Germany" },
   { Icon: Check, label: "100% Halal & Fresh" },
-  { Icon: Clock, label: "48h Advance Order" },
+  { Icon: Clock, label: "Cooked Every Saturday" },
   { Icon: Utensils, label: "Made to Order" },
 ];
 

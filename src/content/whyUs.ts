@@ -35,7 +35,7 @@ export const whyUs: WhyCard[] = [
     number: "06",
     icon: "✓",
     title: "100% Halal & Fresh",
-    body: "Every ingredient sourced fresh. Every pot made to order. We never freeze, never compromise. Minimum 2 plates per order — because kacchi deserves proper preparation.",
+    body: "Every ingredient sourced fresh. Every pot made to order. We never freeze, never compromise — one batch, cooked and collected the same Saturday.",
   },
 ];
 

@@ -8,6 +8,7 @@ import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useSession } from "@/hooks/useSession";
 import { buildWaLink } from "@/lib/whatsapp";
 import { trackEvent } from "@/lib/analytics";
+import { canonical } from "@/lib/seo";
 import {
   api,
   ApiError,
@@ -30,7 +31,9 @@ export const Route = createFileRoute("/order")({
         property: "og:description",
         content: "Pick your kacchi, your Saturday, and free pickup or doorstep delivery.",
       },
+      { property: "og:url", content: canonical("/order") },
     ],
+    links: [{ rel: "canonical", href: canonical("/order") }],
   }),
   component: OrderPage,
 });
@@ -332,7 +335,7 @@ function OrderPage() {
             <em>choose your Saturday.</em>
           </>
         }
-        body="We cook every Saturday. Free pickup at our Wedding kitchen, or doorstep delivery anywhere in Berlin. Cash on delivery — order by Friday 6pm for that week's batch."
+        body="We cook every Saturday. Free pickup at our Wedding kitchen, or doorstep delivery across most of Berlin. Cash on delivery — order by Friday 6pm for that week's batch."
       />
 
       <section className="bg-deep border-t border-line py-20 md:py-28 px-6 md:px-14">

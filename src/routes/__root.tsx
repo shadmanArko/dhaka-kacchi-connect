@@ -17,6 +17,7 @@ import { FloatingSocial } from "@/components/layout/FloatingSocial";
 import { ConsentBanner } from "@/components/ConsentBanner";
 import { SessionProvider } from "@/hooks/useSession";
 import { initAnalytics, trackPageview } from "@/lib/analytics";
+import { SITE_URL } from "@/lib/seo";
 
 function NotFoundComponent() {
   return (
@@ -87,6 +88,30 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      { property: "og:site_name", content: "Dhaka Kacchi Berlin" },
+      { property: "og:locale", content: "en_US" },
+      // Root-level og:title/og:description are the floor for routes that set
+      // neither (/privacy, and the 404 page). Routes that define their own
+      // override these - meta merges leaf-wins, deduped on `name ?? property`.
+      {
+        property: "og:title",
+        content: "Dhaka Kacchi Berlin — Authentic Kacchi Biriyani & Borhani",
+      },
+      {
+        property: "og:description",
+        content:
+          "Berlin's only authentic Kacchi Biriyani and Borhani. Cooked fresh every Saturday — order by Friday 6pm.",
+      },
+      // Absolute URLs, not "/og-image.jpg": WhatsApp (this business's main
+      // sharing channel) does not reliably resolve a relative og:image
+      // against the page URL, and renders a blank card when it can't.
+      { property: "og:image", content: `${SITE_URL}/og-image.jpg` },
+      { property: "og:image:secure_url", content: `${SITE_URL}/og-image.jpg` },
+      { property: "og:image:type", content: "image/jpeg" },
+      { property: "og:image:width", content: "1200" },
+      { property: "og:image:height", content: "630" },
+      { property: "og:image:alt", content: "Kacchi biriyani from Dhaka Kacchi Berlin" },
+      { name: "twitter:image", content: `${SITE_URL}/og-image.jpg` },
     ],
     links: [
       { rel: "stylesheet", href: appCss },

@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { PageHero } from "@/components/sections/PageHero";
 import { Reveal } from "@/components/ui/Reveal";
 import { api } from "@/lib/api";
+import { canonical } from "@/lib/seo";
 
 export const Route = createFileRoute("/subscribe")({
   head: () => ({
@@ -18,7 +19,9 @@ export const Route = createFileRoute("/subscribe")({
         property: "og:description",
         content: "Batch announcements and Eid specials, delivered before anyone else hears.",
       },
+      { property: "og:url", content: canonical("/subscribe") },
     ],
+    links: [{ rel: "canonical", href: canonical("/subscribe") }],
   }),
   component: SubscribePage,
 });

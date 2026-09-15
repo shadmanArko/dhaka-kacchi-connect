@@ -1,0 +1,11 @@
+# Deliberately no "Disallow: /admin". The admin pages carry a noindex meta tag
+# (see src/routes/admin/_layout.tsx), and a Disallow would stop Google fetching
+# them at all - which stops it ever reading that tag. Google then indexes the
+# bare URL as "No information is available for this page", which is worse than
+# the noindex it would otherwise honour. The two mechanisms conflict; noindex
+# is the one that actually keeps a page out of the index.
+
+User-agent: *
+Allow: /
+
+Sitemap: https://dhakakacchi.com/sitemap.xml

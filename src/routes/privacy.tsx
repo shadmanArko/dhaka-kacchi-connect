@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { PageHero } from "@/components/sections/PageHero";
 import { Reveal } from "@/components/ui/Reveal";
 import { site } from "@/content/site";
+import { canonical } from "@/lib/seo";
 
 export const Route = createFileRoute("/privacy")({
   head: () => ({
@@ -11,7 +12,9 @@ export const Route = createFileRoute("/privacy")({
         name: "description",
         content: "What Dhaka Kacchi Berlin collects, why, and how to ask about your data.",
       },
+      { property: "og:url", content: canonical("/privacy") },
     ],
+    links: [{ rel: "canonical", href: canonical("/privacy") }],
   }),
   component: PrivacyPage,
 });

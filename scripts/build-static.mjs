@@ -40,6 +40,35 @@ const ROUTES = [
 const PORT = 4173;
 const OUTPUT_DIR = path.resolve("dist-static");
 
+const SITE_URL = "https://dhakakacchi.com";
+
+// Routes that are real pages but must never enter the sitemap. Exclude them
+// here rather than by editing ROUTES - ROUTES has to stay a complete mirror of
+// routeTree.gen.ts or checkRoutesComplete() below stops working.
+//   /admin*         - internal tooling, also noindexed (routes/admin/_layout.tsx)
+//   /reset-password - reachable only from an emailed token link, also noindexed
+const isExcludedFromSitemap = (route) => route.startsWith("/admin") || route === "/reset-password";
+
+// Slash-terminated, because LiteSpeed's DirectorySlash 301s /about -> /about/
+// and that redirect target is the URL Google actually lands on. Must stay
+// byte-compatible with canonical() in src/lib/seo.ts, so the sitemap and the
+// canonical tags can never disagree.
+function canonicalUrl(route) {
+  return route === "/" ? `${SITE_URL}/` : `${SITE_URL}${route}/`;
+}
+
+// No lastmod/changefreq/priority: the only timestamp available here is the
+// deploy time, which is not a content-modification date, and Google discards
+// lastmod values it judges untrustworthy. changefreq and priority are ignored
+// outright.
+function buildSitemap(routes) {
+  const urls = routes.map((route) => `  <url><loc>${canonicalUrl(route)}</loc></url>`).join("\n");
+  return (
+    `<?xml version="1.0" encoding="UTF-8"?>\n` +
+    `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`
+  );
+}
+
 // An index route inside a directory (e.g. routes/admin/index.tsx) gets a
 // trailing-slash path ("/admin/") distinct from a pathless layout sharing
 // the same directory ("/admin") - the dev/prerender server 307-redirects
@@ -130,6 +159,50 @@ async function main() {
     }
 
     await cp(".output/public", OUTPUT_DIR, { recursive: true });
+
+    // Everything below is written AFTER the cp above, deliberately: fs.cp
+    // defaults to force:true, so anything .output/public happens to contain
+    // would silently clobber a file written before it. Nothing collides today
+    // - the ordering is the invariant, not the current absence of collisions.
+    // The prerender server is still alive here; kill() only runs in `finally`.
+
+    const sitemapRoutes = ROUTES.filter((route) => !isExcludedFromSitemap(route));
+    await writeFile(path.join(OUTPUT_DIR, "sitemap.xml"), buildSitemap(sitemapRoutes), "utf8");
+    console.log(`  sitemap.xml -> ${sitemapRoutes.length} urls`);
+
+    // Capture the app's own branded 404 so Hostinger can serve it via
+    // `ErrorDocument 404 /404.html` (see public/.htaccess). Fetched outside
+    // the ROUTES loop on purpose - that loop throws on any non-ok status, and
+    // here a 404 is exactly the response we want.
+    const notFoundRes = await fetch(`http://localhost:${PORT}/__not-found__`);
+    const notFoundHtml = await notFoundRes.text();
+    // Guard hard: once .htaccess points ErrorDocument at this file, shipping
+    // the wrong body replaces every 404 on the live site with it. A 200 here
+    // would mean the server started answering unknown paths with an SPA shell,
+    // which would silently turn 404.html into a copy of the homepage.
+    if (notFoundRes.status !== 404 || !notFoundHtml.includes("Page not found")) {
+      throw new Error(
+        `Expected HTTP 404 with the branded NotFoundComponent at /__not-found__, got HTTP ` +
+          `${notFoundRes.status} (${notFoundHtml.length} bytes). Refusing to ship a 404.html ` +
+          `that isn't the real not-found page.`,
+      );
+    }
+    // Apache serves this body with a real 404 status via ErrorDocument, which
+    // Google won't index - but the file is ALSO directly reachable at
+    // /404.html with a 200, and that copy is thin, duplicate content. The
+    // not-found page is rendered by __root.tsx's notFoundComponent rather than
+    // a route with its own head(), so there's nowhere upstream to declare this;
+    // inject it here instead.
+    const notFoundWithNoindex = notFoundHtml.replace(
+      "<head>",
+      '<head><meta name="robots" content="noindex, nofollow"/>',
+    );
+    if (notFoundWithNoindex === notFoundHtml) {
+      throw new Error("Could not inject noindex into 404.html - no <head> tag found.");
+    }
+    await writeFile(path.join(OUTPUT_DIR, "404.html"), notFoundWithNoindex, "utf8");
+    console.log(`  404.html -> branded not-found page`);
+
     console.log(`\nStatic site written to ${path.relative(process.cwd(), OUTPUT_DIR)}/`);
   } finally {
     kill();

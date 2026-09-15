@@ -8,7 +8,9 @@ export const site = {
   tagline: "Authentic Kacchi Biriyani & Borhani",
   location: "Berlin, Germany",
   email: "hello@dhakakacchi.com",
-  website: "www.dhakakacchi.com",
+  // Apex, not www - www 301s here (see public/.htaccess), so printing the
+  // www form in the footer would advertise the non-canonical hostname.
+  website: "dhakakacchi.com",
   whatsappNumber: "4915563583687", // country code + number, no +
   socials: {
     instagram: "https://www.instagram.com/dhakakacchi",

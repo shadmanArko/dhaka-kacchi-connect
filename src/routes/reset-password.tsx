@@ -12,7 +12,13 @@ const searchSchema = z.object({
 export const Route = createFileRoute("/reset-password")({
   validateSearch: searchSchema,
   head: () => ({
-    meta: [{ title: "Reset password — Dhaka Kacchi Berlin" }],
+    meta: [
+      { title: "Reset password — Dhaka Kacchi Berlin" },
+      // Reachable only from an emailed token link. Indexed it's thin content
+      // that advertises the auth flow, so it's noindexed here and excluded
+      // from the sitemap in scripts/build-static.mjs.
+      { name: "robots", content: "noindex, nofollow" },
+    ],
   }),
   component: ResetPasswordPage,
 });

@@ -6,13 +6,13 @@ export const timeline = [
   },
   {
     step: "Step 2",
-    title: "Order 48 Hours Ahead",
-    body: "We prepare everything from scratch. Please order at least 48 hours in advance so your kacchi gets the time it deserves. Minimum 2 plates per order.",
+    title: "Order by Friday 6pm",
+    body: "We cook one batch a week, entirely from scratch. Orders for a given Saturday close the Friday before at 6pm — after that, the pot is already counted.",
   },
   {
     step: "Step 3",
-    title: "Collect in Berlin",
-    body: "Pick up your order in Berlin. Location shared upon order confirmation. Each batch is prepared fresh, in full — never frozen, never reheated.",
+    title: "Collect or Get It Delivered",
+    body: "Free pickup at our Wedding kitchen, or doorstep delivery across most of Berlin. Each batch is prepared fresh, in full — never frozen, never reheated.",
   },
   {
     step: "Enjoy",
@@ -25,5 +25,7 @@ export const specs = [
   { value: "6+", label: "Hours Slow-Cooked" },
   { value: "45+", label: "Spices Blended" },
   { value: "24h", label: "Overnight Marinade" },
-  { value: "48h", label: "Advance Order" },
+  // Keep `value` to ~3 characters: FoodSpotlight renders it at text-[3.2rem]
+  // inside a half-width grid cell, so anything longer wraps at 375px.
+  { value: "Sat", label: "One Batch a Week" },
 ];

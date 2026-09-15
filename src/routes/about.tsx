@@ -6,6 +6,7 @@ import { CTASection } from "@/components/sections/CTASection";
 import { Reveal } from "@/components/ui/Reveal";
 import { Eyebrow } from "@/components/ui/Typography";
 import { values } from "@/content/whyUs";
+import { canonical } from "@/lib/seo";
 import kacchi from "@/assets/kacchi.jpg";
 import borhani2 from "@/assets/borhani-2-web.jpg";
 
@@ -23,7 +24,9 @@ export const Route = createFileRoute("/about")({
         property: "og:description",
         content: "A doctor, a craving, and a pot of kacchi. Born in Dhaka. Living in Berlin.",
       },
+      { property: "og:url", content: canonical("/about") },
     ],
+    links: [{ rel: "canonical", href: canonical("/about") }],
   }),
   component: AboutPage,
 });

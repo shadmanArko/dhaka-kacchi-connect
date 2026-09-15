@@ -9,7 +9,11 @@ export default tseslint.config(
   // Old/ is a frozen archive of the pre-rebuild static site (see root
   // CLAUDE.md) - dead reference code, never built or shipped, shouldn't be
   // linted.
-  { ignores: ["dist", ".output", ".vinxi", "Old/**"] },
+  // "dist" is vestigial - this project's static export goes to dist-static/
+  // (see scripts/build-static.mjs). Without dist-static here, `bun run lint`
+  // fails with thousands of prettier errors against minified build output for
+  // anyone who has built locally; CI only escapes it by linting before building.
+  { ignores: ["dist", "dist-static", ".output", ".vinxi", "Old/**"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
