@@ -18,7 +18,7 @@ import { trackEvent } from "@/lib/analytics";
  */
 
 const inputClass =
-  "w-full px-4 py-4 bg-gold/[0.06] border border-line text-cream placeholder:text-muted-warm font-sans text-[0.88rem] outline-none focus:border-gold/50 transition-colors";
+  "w-full px-4 py-4 bg-gold/[0.06] border border-line-strong text-cream placeholder:text-muted-warm font-sans text-base outline-none focus:border-gold/50 transition-colors";
 
 const linkClass =
   "font-sans text-[0.78rem] text-gold hover:text-gold-2 underline underline-offset-4";
@@ -249,6 +249,7 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
               type="text"
               required
               placeholder="Phone or email"
+              aria-label="Phone number or email"
               autoComplete="username"
               value={loginIdentifier}
               onChange={(e) => setLoginIdentifier(e.target.value)}
@@ -258,12 +259,17 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
               type="password"
               required
               placeholder="Password"
+              aria-label="Password"
               autoComplete="current-password"
               value={loginPassword}
               onChange={(e) => setLoginPassword(e.target.value)}
               className={inputClass}
             />
-            {error && <p className="font-sans text-sm text-red-400">{error}</p>}
+            {error && (
+              <p role="alert" className="font-sans text-sm text-red-400">
+                {error}
+              </p>
+            )}
             <Button type="submit" variant="gold" className="w-full justify-center" disabled={busy}>
               {busy ? "Logging in…" : "Log in"}
             </Button>
@@ -292,6 +298,7 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
               required
               inputMode="tel"
               placeholder="Phone number (e.g. +491701234567)"
+              aria-label="Phone number"
               autoComplete="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
@@ -301,6 +308,7 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
               type="text"
               required
               placeholder="Full name"
+              aria-label="Full name"
               autoComplete="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -328,7 +336,8 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
                 type="text"
                 required
                 placeholder="Street"
-                autoComplete="street-address"
+                aria-label="Street"
+                autoComplete="address-line1"
                 value={street}
                 onChange={(e) => setStreet(e.target.value)}
                 className={`ph-no-capture ${inputClass}`}
@@ -337,6 +346,8 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
                 type="text"
                 required
                 placeholder="No."
+                aria-label="House number"
+                autoComplete="address-line2"
                 value={houseNumber}
                 onChange={(e) => setHouseNumber(e.target.value)}
                 className={`ph-no-capture sm:w-24 ${inputClass}`}
@@ -349,6 +360,7 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
                 inputMode="numeric"
                 maxLength={5}
                 placeholder="Postal code"
+                aria-label="Postal code"
                 autoComplete="postal-code"
                 value={postalCode}
                 onChange={(e) => setPostalCode(e.target.value)}
@@ -358,6 +370,8 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
                 type="text"
                 required
                 placeholder="City"
+                aria-label="City"
+                autoComplete="address-level2"
                 value={city}
                 onChange={(e) => setCity(e.target.value)}
                 className={`ph-no-capture ${inputClass}`}
@@ -367,6 +381,7 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
               type="email"
               required
               placeholder="Email address"
+              aria-label="Email address"
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -382,7 +397,11 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
               onChange={(e) => setPassword(e.target.value)}
               className={inputClass}
             />
-            {error && <p className="font-sans text-sm text-red-400">{error}</p>}
+            {error && (
+              <p role="alert" className="font-sans text-sm text-red-400">
+                {error}
+              </p>
+            )}
             <Button type="submit" variant="gold" className="w-full justify-center" disabled={busy}>
               {busy ? "Sending code…" : "Continue"}
             </Button>
@@ -406,12 +425,22 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
               inputMode="numeric"
               maxLength={6}
               placeholder="6-digit code"
+              aria-label="6-digit verification code"
+              autoComplete="one-time-code"
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
               className={`text-center tracking-[0.5em] ${inputClass}`}
             />
-            {error && <p className="font-sans text-sm text-red-400">{error}</p>}
-            {notice && <p className="font-sans text-sm text-gold">{notice}</p>}
+            {error && (
+              <p role="alert" className="font-sans text-sm text-red-400">
+                {error}
+              </p>
+            )}
+            {notice && (
+              <p role="status" className="font-sans text-sm text-gold">
+                {notice}
+              </p>
+            )}
             <Button type="submit" variant="gold" className="w-full justify-center" disabled={busy}>
               {busy ? "Verifying…" : "Verify & create account"}
             </Button>
@@ -438,7 +467,11 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
               onChange={(e) => setForgotEmail(e.target.value)}
               className={inputClass}
             />
-            {error && <p className="font-sans text-sm text-red-400">{error}</p>}
+            {error && (
+              <p role="alert" className="font-sans text-sm text-red-400">
+                {error}
+              </p>
+            )}
             <Button type="submit" variant="gold" className="w-full justify-center" disabled={busy}>
               {busy ? "Sending…" : "Send reset link"}
             </Button>

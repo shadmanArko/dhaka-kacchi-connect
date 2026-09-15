@@ -63,7 +63,23 @@ export function OrderTable({
         </TableHeader>
         <TableBody>
           {orders.map((order) => (
-            <TableRow key={order.id} onClick={() => onSelect(order)} className="cursor-pointer">
+            // A bare onClick on a <tr> is mouse-only: no tab stop, no Enter or
+            // Space. Staff working through a delivery list on a keyboard could
+            // not open a single order.
+            <TableRow
+              key={order.id}
+              onClick={() => onSelect(order)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onSelect(order);
+                }
+              }}
+              tabIndex={0}
+              role="button"
+              aria-label={`Open order for ${order.customerName}`}
+              className="cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold"
+            >
               <TableCell className="font-medium">
                 {order.customerName}
                 {order.createdBy === "staff" && (

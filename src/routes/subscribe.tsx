@@ -82,7 +82,7 @@ function SubscribePage() {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="your@email.com"
               autoComplete="email"
-              className="flex-1 px-6 py-5 bg-gold/[0.06] border border-line sm:border-r-0 text-cream placeholder:text-muted-warm font-sans text-[0.88rem] outline-none focus:border-gold/50 transition-colors"
+              className="flex-1 px-6 py-5 bg-gold/[0.06] border border-line-strong sm:border-r-0 text-cream placeholder:text-muted-warm font-sans text-base outline-none focus:border-gold/50 transition-colors"
             />
             <button
               type="submit"

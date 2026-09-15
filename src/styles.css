@@ -17,10 +17,24 @@
   --surface:   oklch(0.13 0.011 80);          /* #161510 */
   --gold:      oklch(0.74 0.084 82);          /* #C8A96E */
   --gold-2:    oklch(0.87 0.055 82);          /* #E4CEAA */
-  --gold-3:    oklch(0.48 0.11 78);           /* #8B6914 */
+  /* gold-3 and muted-warm were raised to L=0.58 for WCAG AA. At their previous
+     lightness they measured 3.03:1 and 3.49:1 against these backgrounds -
+     under the 4.5:1 needed for normal text, and none of their usages are large
+     enough for the 3:1 large-text exemption (all 10-15px). They now measure
+     4.63:1 and 4.69:1 at worst. NB: the hex comments here are the REAL
+     rendered values; the previous ones were stale and understated the gap. */
+  --gold-3:    oklch(0.58 0.11 78);           /* #9E711E */
   --cream:     oklch(0.93 0.036 85);          /* #F0E6D0 */
-  --muted-warm: oklch(0.51 0.024 78);         /* #7A7060 */
+  --muted-warm: oklch(0.58 0.024 78);         /* #82796B */
+  /* Decorative hairline - dividers and section rules. Deliberately still
+     subtle: WCAG 1.4.11's 3:1 covers the boundary of a CONTROL, not ornament,
+     and raising this globally would triple the visual weight of every rule on
+     the site. Form fields use --line-strong instead. */
   --line:      oklch(0.74 0.084 82 / 0.18);
+  /* Control boundaries - inputs, selects, textareas. 3.22:1 composited, which
+     clears 1.4.11. At --line's 0.18 alpha a form field's edge measured 1.27:1
+     and was very nearly invisible against the page. */
+  --line-strong: oklch(0.74 0.084 82 / 0.55);
 
   /* shadcn tokens (kept, mapped to brand) */
   --radius: 0.125rem;
@@ -41,7 +55,9 @@
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: var(--cream);
   --border: var(--line);
-  --input: var(--line);
+  /* Control boundary, not ornament - see --line-strong. This is what the
+     admin panel's shadcn inputs/selects render with. */
+  --input: var(--line-strong);
   --ring: var(--gold);
 }
 
@@ -60,6 +76,7 @@
   --color-cream: var(--cream);
   --color-muted-warm: var(--muted-warm);
   --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -112,6 +129,20 @@
   :focus-visible {
     outline: 2px solid var(--color-gold);
     outline-offset: 3px;
+  }
+
+  /* Mobile Safari/Chrome paint a translucent grey box over any tapped
+     element. On this dark palette that reads as a rendering glitch rather
+     than feedback, so it's suppressed here and replaced with explicit
+     active: states on the controls themselves (see DkButton and the order
+     page's steppers). */
+  a,
+  button,
+  [role="button"],
+  input,
+  select,
+  textarea {
+    -webkit-tap-highlight-color: transparent;
   }
 }
 

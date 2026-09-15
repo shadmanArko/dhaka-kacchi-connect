@@ -65,7 +65,11 @@ function AdminLoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
               />
             </div>
-            {error && <p className="font-sans text-sm text-destructive">{error}</p>}
+            {error && (
+              <p role="alert" className="font-sans text-sm text-destructive">
+                {error}
+              </p>
+            )}
             <Button type="submit" className="w-full" disabled={busy}>
               {busy ? "Logging in…" : "Log in"}
             </Button>

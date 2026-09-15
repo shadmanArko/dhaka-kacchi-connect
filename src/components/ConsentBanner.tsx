@@ -16,6 +16,13 @@ export function ConsentBanner() {
     setVisible(!hasRespondedToConsent());
   }, []);
 
+  // This used to claim role="dialog" while having no aria-modal, no focus
+  // trap and no programmatic focus - so assistive tech announced a dialog
+  // that behaved like ordinary page content. It genuinely IS ordinary page
+  // content: consent isn't a precondition for ordering, the page behind stays
+  // usable, and trapping focus here would be hostile. So it's a labelled
+  // region now, which is what it actually is. Deliberately no autofocus
+  // either - stealing focus on every first page load is its own regression.
   if (!visible) return null;
 
   function accept() {
@@ -30,7 +37,7 @@ export function ConsentBanner() {
 
   return (
     <div
-      role="dialog"
+      role="region"
       aria-label="Cookie consent"
       className="fixed inset-x-0 bottom-0 z-[60] border-t border-line bg-black-ink/97 backdrop-blur-sm px-6 py-6 md:px-10"
     >

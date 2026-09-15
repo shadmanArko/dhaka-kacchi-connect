@@ -24,7 +24,7 @@ export const Route = createFileRoute("/reset-password")({
 });
 
 const inputClass =
-  "w-full px-4 py-4 bg-gold/[0.06] border border-line text-cream placeholder:text-muted-warm font-sans text-[0.88rem] outline-none focus:border-gold/50 transition-colors";
+  "w-full px-4 py-4 bg-gold/[0.06] border border-line-strong text-cream placeholder:text-muted-warm font-sans text-base outline-none focus:border-gold/50 transition-colors";
 
 type SubmitState = "idle" | "submitting" | "success" | "error";
 
@@ -92,7 +92,11 @@ function ResetPasswordPage() {
                 onChange={(e) => setNewPassword(e.target.value)}
                 className={inputClass}
               />
-              {submitState === "error" && <p className="font-sans text-sm text-red-400">{error}</p>}
+              {submitState === "error" && (
+                <p role="alert" className="font-sans text-sm text-red-400">
+                  {error}
+                </p>
+              )}
               <button
                 type="submit"
                 disabled={submitState === "submitting"}

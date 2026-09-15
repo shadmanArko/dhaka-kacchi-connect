@@ -73,9 +73,9 @@ function quoteErrorMessage(quote: PostalCodeCheckResult): string {
 }
 
 const inputClass =
-  "px-4 py-4 bg-gold/[0.06] border border-line text-cream placeholder:text-muted-warm font-sans text-[0.88rem] outline-none focus:border-gold/50 transition-colors";
+  "px-4 py-4 bg-gold/[0.06] border border-line-strong text-cream placeholder:text-muted-warm font-sans text-base outline-none focus:border-gold/50 transition-colors";
 const lockedInputClass =
-  "px-4 py-4 bg-gold/[0.02] border border-line text-muted-warm font-sans text-[0.88rem] outline-none cursor-not-allowed";
+  "px-4 py-4 bg-gold/[0.02] border border-line-strong text-muted-warm font-sans text-base outline-none cursor-not-allowed";
 
 function OrderPage() {
   const session = useSession();
@@ -614,7 +614,7 @@ function OrderPage() {
                       <button
                         type="button"
                         onClick={() => setQty(item.sku, (quantities[item.sku] ?? 0) - 1)}
-                        className="w-9 h-9 border border-line text-cream hover:border-gold/50 transition-colors"
+                        className="w-11 h-11 border border-line-strong text-cream hover:border-gold/50 active:bg-gold/20 active:border-gold transition-colors"
                         aria-label={`Decrease ${item.name}`}
                       >
                         −
@@ -625,7 +625,7 @@ function OrderPage() {
                       <button
                         type="button"
                         onClick={() => setQty(item.sku, (quantities[item.sku] ?? 0) + 1)}
-                        className="w-9 h-9 border border-line text-cream hover:border-gold/50 transition-colors"
+                        className="w-11 h-11 border border-line-strong text-cream hover:border-gold/50 active:bg-gold/20 active:border-gold transition-colors"
                         aria-label={`Increase ${item.name}`}
                       >
                         +
@@ -641,6 +641,7 @@ function OrderPage() {
                 </legend>
                 <select
                   id="deliveryDate"
+                  aria-label="Delivery Saturday"
                   value={deliveryDate}
                   onChange={(e) => {
                     setDeliveryDate(e.target.value);
@@ -705,7 +706,8 @@ function OrderPage() {
                           <input
                             type="text"
                             placeholder="Street"
-                            autoComplete="street-address"
+                            aria-label="Street"
+                            autoComplete="address-line1"
                             value={street}
                             onChange={(e) => {
                               setStreet(e.target.value);
@@ -716,6 +718,8 @@ function OrderPage() {
                           <input
                             type="text"
                             placeholder="No."
+                            aria-label="House number"
+                            autoComplete="address-line2"
                             value={houseNumber}
                             onChange={(e) => {
                               setHouseNumber(e.target.value);
@@ -730,6 +734,7 @@ function OrderPage() {
                             inputMode="numeric"
                             maxLength={5}
                             placeholder="Postal code"
+                            aria-label="Postal code"
                             autoComplete="postal-code"
                             value={postalCode}
                             onChange={(e) => {
@@ -746,6 +751,8 @@ function OrderPage() {
                           <input
                             type="text"
                             placeholder="City"
+                            aria-label="City"
+                            autoComplete="address-level2"
                             value={city}
                             onChange={(e) => setCity(e.target.value)}
                             className={`ph-no-capture ${inputClass}`}
@@ -764,7 +771,9 @@ function OrderPage() {
                           </p>
                         )}
                         {quoteState === "error" && (
-                          <p className="font-sans text-[0.85rem] text-red-400">{quoteError}</p>
+                          <p role="alert" className="font-sans text-[0.85rem] text-red-400">
+                            {quoteError}
+                          </p>
                         )}
                       </div>
                     )}
@@ -775,6 +784,7 @@ function OrderPage() {
                       type="text"
                       required
                       placeholder="Full name"
+                      aria-label="Full name"
                       autoComplete="name"
                       value={customerName}
                       onChange={(e) => setCustomerName(e.target.value)}
@@ -786,6 +796,7 @@ function OrderPage() {
                       readOnly
                       value={session.customer.phone}
                       title="Phone is locked to your account"
+                      aria-label="Phone number (locked to your account)"
                       className={`ph-no-capture ${lockedInputClass}`}
                     />
                     <input
@@ -794,10 +805,12 @@ function OrderPage() {
                       readOnly
                       value={session.customer.email}
                       title="Email is locked to your account"
+                      aria-label="Email address (locked to your account)"
                       className={`ph-no-capture sm:col-span-2 ${lockedInputClass}`}
                     />
                     <textarea
                       placeholder="Notes (optional)"
+                      aria-label="Notes for your order (optional)"
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
                       rows={3}
@@ -823,7 +836,9 @@ function OrderPage() {
 
               {submitState === "error" && (
                 <div className="space-y-4">
-                  <p className="font-sans text-sm text-red-400">{submitError}</p>
+                  <p role="alert" className="font-sans text-sm text-red-400">
+                    {submitError}
+                  </p>
                   {/* The copy above promises WhatsApp "below" - this is it.
                       Previously the only buildWaLink call on this page lived in
                       the loadState === "error" branch, which is mutually
@@ -869,7 +884,7 @@ function OrderPage() {
                     ? !canSubmit || submitState === "submitting" || submitTimedOut
                     : !canCheckout
                 }
-                className="w-full bg-gold text-black-ink px-9 py-5 font-sans text-[0.8rem] uppercase tracking-[0.25em] hover:bg-gold-2 transition-colors disabled:opacity-50"
+                className="w-full bg-gold text-black-ink px-9 py-5 font-sans text-[0.8rem] uppercase tracking-[0.25em] hover:bg-gold-2 active:bg-gold-3 active:text-cream transition-colors disabled:opacity-50"
               >
                 {session.customer
                   ? submitState === "submitting"

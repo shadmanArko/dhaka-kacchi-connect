@@ -87,8 +87,14 @@ export function SiteHeader() {
         </button>
       </header>
 
-      {/* Mobile menu */}
+      {/* Mobile menu. `inert` when closed is load-bearing, not decoration:
+          opacity-0 + pointer-events-none hides it from sight and the mouse but
+          leaves its 5 links in the tab order and the accessibility tree, so a
+          keyboard or screen-reader user on a phone tabbed through five
+          invisible links on every page. */}
       <div
+        inert={!open}
+        aria-hidden={!open}
         className={cn(
           "fixed inset-0 z-40 md:hidden bg-black-ink/95 backdrop-blur-lg transition-opacity duration-300",
           open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none",
