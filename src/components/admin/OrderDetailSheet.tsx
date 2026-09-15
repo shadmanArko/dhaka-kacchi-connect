@@ -81,8 +81,26 @@ export function OrderDetailSheet({
     0,
     order.subtotalCents + order.deliveryFeeCents - parsedDiscountCents,
   );
-  const discountInvalid = parsedDiscountCents < 0 || parsedDiscountCents > maxDiscountCents;
+  // Number("abc") is NaN and (NaN || 0) * 100 is 0, so without the isFinite
+  // check typing garbage into the field reads as "clear the discount" and
+  // would silently wipe a real one.
+  const discountInvalid =
+    !Number.isFinite(Number(discountEuros)) ||
+    parsedDiscountCents < 0 ||
+    parsedDiscountCents > maxDiscountCents;
   const isCancelled = order.status === "cancelled";
+
+  // Saving an unchanged discount re-fires a real customer email AND a Telegram
+  // message (the backend awaits both), so a fumbled second click spams the
+  // customer. Compared against the `order` prop rather than a snapshot: the
+  // parent replaces it via onUpdated after every save, while the sync effect
+  // above keys on [order?.id] and deliberately does not re-run for the same
+  // order. The backend stores discountReason as `trim() || null`, so an empty
+  // draft ("") and a stored null must normalise to the same thing or this
+  // would read permanently dirty.
+  const savedReason = order.discountReason ?? "";
+  const discountDirty =
+    parsedDiscountCents !== order.discountCents || discountReason.trim() !== savedReason.trim();
 
   async function saveDiscount() {
     if (discountInvalid) return;
@@ -235,7 +253,7 @@ export function OrderDetailSheet({
               </p>
               <Button
                 onClick={saveDiscount}
-                disabled={isCancelled || discountInvalid || savingDiscount}
+                disabled={isCancelled || discountInvalid || savingDiscount || !discountDirty}
                 className="w-full"
               >
                 {savingDiscount ? "Saving…" : "Save discount"}

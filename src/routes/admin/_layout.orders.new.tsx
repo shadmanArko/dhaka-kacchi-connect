@@ -22,6 +22,8 @@ export const Route = createFileRoute("/admin/_layout/orders/new")({
   component: AdminNewOrderPage,
 });
 
+type LoadState = "loading" | "ready" | "error";
+
 function formatEuro(cents: number) {
   return `€${(cents / 100).toFixed(2)}`;
 }
@@ -41,10 +43,32 @@ function AdminNewOrderPage() {
   const session = useAdminSession();
   const navigate = useNavigate();
 
+  // Same load/retry shape as the admin order list (_layout.index.tsx), minus
+  // its session-token guard - api.getMenu() is public and takes no token. The
+  // state matters for more than a spinner: with an empty menu the form still
+  // renders and submits, producing a EUR 0 order with no items, so the submit
+  // button is gated on "ready" below.
   const [menu, setMenu] = useState<MenuItem[]>([]);
+  const [menuState, setMenuState] = useState<LoadState>("loading");
+  const [menuRetryCount, setMenuRetryCount] = useState(0);
+
   useEffect(() => {
-    api.getMenu().then((res) => setMenu(res.items));
-  }, []);
+    let cancelled = false;
+    setMenuState("loading");
+    api
+      .getMenu()
+      .then((res) => {
+        if (cancelled) return;
+        setMenu(res.items);
+        setMenuState("ready");
+      })
+      .catch(() => {
+        if (!cancelled) setMenuState("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [menuRetryCount]);
 
   // --- Customer resolution -------------------------------------------
   const [searchIdentifier, setSearchIdentifier] = useState("");
@@ -175,6 +199,9 @@ function AdminNewOrderPage() {
     fulfillmentType === "pickup" || (quoteState === "ready" && quote?.deliverable === true);
   const dateValid = isSaturday(deliveryDate);
   const canSubmit =
+    // Without this a failed menu load leaves a form that looks usable but can
+    // only produce an empty EUR 0 order.
+    menuState === "ready" &&
     customerResolved &&
     itemCount > 0 &&
     dateValid &&
@@ -342,35 +369,53 @@ function AdminNewOrderPage() {
               <CardTitle className="font-sans text-base">Items</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {menu.map((item) => (
-                <div key={item.sku} className="flex items-center justify-between gap-4">
-                  <div>
-                    <p className="font-sans text-sm font-medium">{item.name}</p>
-                    <p className="font-sans text-xs text-muted-foreground">
-                      {formatEuro(item.priceCents)}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      onClick={() => setQty(item.sku, (quantities[item.sku] ?? 0) - 1)}
-                    >
-                      −
-                    </Button>
-                    <span className="w-6 text-center">{quantities[item.sku] ?? 0}</span>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      onClick={() => setQty(item.sku, (quantities[item.sku] ?? 0) + 1)}
-                    >
-                      +
-                    </Button>
-                  </div>
+              {menuState === "loading" && (
+                <p className="font-sans text-sm text-muted-foreground">Loading menu…</p>
+              )}
+              {menuState === "error" && (
+                <div className="py-4 text-center">
+                  <p className="mb-3 font-sans text-sm text-muted-foreground">
+                    Couldn't load the menu.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setMenuRetryCount((n) => n + 1)}
+                  >
+                    Retry
+                  </Button>
                 </div>
-              ))}
+              )}
+              {menuState === "ready" &&
+                menu.map((item) => (
+                  <div key={item.sku} className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="font-sans text-sm font-medium">{item.name}</p>
+                      <p className="font-sans text-xs text-muted-foreground">
+                        {formatEuro(item.priceCents)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setQty(item.sku, (quantities[item.sku] ?? 0) - 1)}
+                      >
+                        −
+                      </Button>
+                      <span className="w-6 text-center">{quantities[item.sku] ?? 0}</span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setQty(item.sku, (quantities[item.sku] ?? 0) + 1)}
+                      >
+                        +
+                      </Button>
+                    </div>
+                  </div>
+                ))}
             </CardContent>
           </Card>
 

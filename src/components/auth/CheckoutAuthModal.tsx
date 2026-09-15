@@ -29,6 +29,11 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
   const session = useSession();
   const [step, setStep] = useState<Step>("start");
   const [error, setError] = useState("");
+  // Affirmative messages (currently only "a new code was sent") need their own
+  // state - they used to be written into `error`, which renders red, so a
+  // successful resend looked like a failure. Must be cleared everywhere
+  // setError("") is, or a stale success line sits next to a real error.
+  const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
 
   // Login fields
@@ -55,6 +60,7 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
   function reset() {
     setStep("start");
     setError("");
+    setNotice("");
     setLoginIdentifier("");
     setLoginPassword("");
     setCode("");
@@ -70,6 +76,7 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
     e.preventDefault();
     setBusy(true);
     setError("");
+    setNotice("");
     try {
       const result = await api.login({
         identifier: loginIdentifier.trim(),
@@ -92,6 +99,7 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
     e.preventDefault();
     setBusy(true);
     setError("");
+    setNotice("");
     try {
       await api.register({
         phone: phone.trim(),
@@ -124,6 +132,7 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
     e.preventDefault();
     setBusy(true);
     setError("");
+    setNotice("");
     try {
       const result = await api.verifyOtp({ phone: phone.trim(), code: code.trim() });
       session.login(result.token, result.customer);
@@ -143,6 +152,7 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
   async function resendCode() {
     setBusy(true);
     setError("");
+    setNotice("");
     try {
       await api.register({
         phone: phone.trim(),
@@ -157,7 +167,7 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
         email: email.trim(),
         password,
       });
-      setError("A new code was sent.");
+      setNotice("A new code was sent.");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't resend the code right now.");
     } finally {
@@ -169,6 +179,7 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
     e.preventDefault();
     setBusy(true);
     setError("");
+    setNotice("");
     try {
       await api.requestPasswordReset(forgotEmail.trim());
       setStep("forgot-password-sent");
@@ -288,7 +299,7 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
               autoComplete="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className={inputClass}
+              className={`ph-no-capture ${inputClass}`}
             />
             <div className="space-y-1.5">
               <label
@@ -323,7 +334,7 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
                 placeholder="No."
                 value={houseNumber}
                 onChange={(e) => setHouseNumber(e.target.value)}
-                className={`sm:w-24 ${inputClass}`}
+                className={`ph-no-capture sm:w-24 ${inputClass}`}
               />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -395,6 +406,7 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
               className={`text-center tracking-[0.5em] ${inputClass}`}
             />
             {error && <p className="font-sans text-sm text-red-400">{error}</p>}
+            {notice && <p className="font-sans text-sm text-gold">{notice}</p>}
             <Button type="submit" variant="gold" className="w-full justify-center" disabled={busy}>
               {busy ? "Verifying…" : "Verify & create account"}
             </Button>

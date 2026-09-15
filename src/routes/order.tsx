@@ -501,7 +501,7 @@ function OrderPage() {
                               setStreet(e.target.value);
                               resetQuote();
                             }}
-                            className={inputClass}
+                            className={`ph-no-capture ${inputClass}`}
                           />
                           <input
                             type="text"
@@ -511,7 +511,7 @@ function OrderPage() {
                               setHouseNumber(e.target.value);
                               resetQuote();
                             }}
-                            className={`sm:w-24 ${inputClass}`}
+                            className={`ph-no-capture sm:w-24 ${inputClass}`}
                           />
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -531,14 +531,14 @@ function OrderPage() {
                               setPostalCode(e.target.value);
                               resetQuote();
                             }}
-                            className={inputClass}
+                            className={`ph-no-capture ${inputClass}`}
                           />
                           <input
                             type="text"
                             placeholder="City"
                             value={city}
                             onChange={(e) => setCity(e.target.value)}
-                            className={inputClass}
+                            className={`ph-no-capture ${inputClass}`}
                           />
                         </div>
 
@@ -568,7 +568,7 @@ function OrderPage() {
                       autoComplete="name"
                       value={customerName}
                       onChange={(e) => setCustomerName(e.target.value)}
-                      className={inputClass}
+                      className={`ph-no-capture ${inputClass}`}
                     />
                     <input
                       type="tel"
@@ -576,7 +576,7 @@ function OrderPage() {
                       readOnly
                       value={session.customer.phone}
                       title="Phone is locked to your account"
-                      className={lockedInputClass}
+                      className={`ph-no-capture ${lockedInputClass}`}
                     />
                     <input
                       type="email"
@@ -584,14 +584,14 @@ function OrderPage() {
                       readOnly
                       value={session.customer.email}
                       title="Email is locked to your account"
-                      className={`sm:col-span-2 ${lockedInputClass}`}
+                      className={`ph-no-capture sm:col-span-2 ${lockedInputClass}`}
                     />
                     <textarea
                       placeholder="Notes (optional)"
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
                       rows={3}
-                      className={`sm:col-span-2 resize-none ${inputClass}`}
+                      className={`ph-no-capture sm:col-span-2 resize-none ${inputClass}`}
                     />
                   </fieldset>
                 </>
