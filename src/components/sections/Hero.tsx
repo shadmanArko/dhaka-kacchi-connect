@@ -4,6 +4,7 @@ import { AnchorButton } from "@/components/ui/DkButton";
 import { Rings } from "@/components/ui/Rings";
 import { Tag } from "@/components/ui/Typography";
 import kacchi from "@/assets/kacchi.jpg";
+import kacchi900 from "@/assets/kacchi-900.jpg";
 
 export function Hero() {
   return (
@@ -57,11 +58,24 @@ export function Hero() {
 
       {/* Right: photo */}
       <div className="relative w-full lg:w-[48%] h-[55vw] min-h-[300px] lg:h-auto lg:min-h-full overflow-hidden shrink-0">
+        {/* This is the LCP element, so it's worth being precise. The 900w
+            variant is sized so a 2x phone actually picks it: at 390 CSS px the
+            browser needs 780px, and a 750w candidate was just under that, so
+            it fell back to the full 1313px file and the srcset bought nothing.
+            3x phones still take the 1313w, correctly. width/height give the
+            intrinsic ratio so the box is reserved and the hero doesn't shift
+            as it loads; fetchpriority marks it as the one image worth
+            fetching first. */}
         <img
           src={kacchi}
+          srcSet={`${kacchi900} 900w, ${kacchi} 1313w`}
+          sizes="(min-width: 1024px) 48vw, 100vw"
+          width={1313}
+          height={1050}
           alt="Dhaka Kacchi Biriyani Berlin — authentic slow-cooked kacchi"
           className="absolute inset-0 w-full h-full object-cover object-[center_30%] animate-img-zoom"
           loading="eager"
+          fetchPriority="high"
           decoding="async"
         />
         <div

@@ -38,3 +38,32 @@ ErrorDocument 404 /404.html
   RewriteCond %{HTTP_HOST} ^www\.dhakakacchi\.com$ [NC]
   RewriteRule ^(.*)$ https://dhakakacchi.com/$1 [R=301,L]
 </IfModule>
+
+# Caching. Vite content-hashes everything under /assets/ (the filename changes
+# whenever the bytes do), so those are safe to cache forever. The per-route
+# index.html files are NOT hashed - build-static.mjs writes them at fixed paths
+# - so caching those would pin visitors to an old build that references chunks
+# that no longer exist. They deliberately get no-cache.
+# Both blocks are <IfModule>-guarded: if the module isn't loaded the rules are
+# skipped rather than 500-ing the site.
+<IfModule mod_headers.c>
+  # Only files carrying a Vite content hash (e.g. index-DJ1gRJR6.js) get the
+  # immutable year. Matching on extension alone would also catch og-image.jpg,
+  # favicon.ico and the favicons/ set - none of which are hashed, so a year-long
+  # immutable cache on those would make them effectively unchangeable.
+  <FilesMatch "-[A-Za-z0-9_-]{8,}\.(js|css|woff2|woff|jpg|jpeg|png|gif|svg|webp|avif)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+
+  # Unhashed static files: cached, but replaceable within a day.
+  <FilesMatch "^(og-image\.jpg|favicon\.ico|.*\.(png|jpg|jpeg|svg|webp|ico))$">
+    Header setifempty Cache-Control "public, max-age=86400"
+  </FilesMatch>
+
+  # index.html is written to a fixed path by build-static.mjs and is NOT
+  # hashed. Caching it would pin visitors to an old build still referencing
+  # chunks that no longer exist on disk.
+  <FilesMatch "\.(html|xml|txt|json)$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+</IfModule>

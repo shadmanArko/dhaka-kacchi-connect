@@ -118,9 +118,22 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
+      // Both are separate origins contacted from mount effects - the API on
+      // every page with a session, PostHog on every page full stop. Without
+      // these the DNS + TLS + TCP handshake is paid serially at the moment
+      // they're first needed, most visibly on /order where the menu can't
+      // render until a cold connection to the API completes.
+      { rel: "preconnect", href: "https://api.dhakakacchi.com" },
+      { rel: "preconnect", href: "https://eu.i.posthog.com" },
       {
+        // Weights audited against actual usage. Dropped: serif 500, 600 and
+        // italic 600 (zero `font-serif font-medium/semibold` in the codebase)
+        // and DM Sans italic (every <em> is forced to serif italic). ADDED:
+        // sans 500 and 600, which are used 28 and 10 times across the admin UI
+        // and were never requested - the browser was synthesising faux-bold
+        // for them.
         rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,600&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;1,9..40,300&display=swap",
+        href: "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap",
       },
     ],
   }),

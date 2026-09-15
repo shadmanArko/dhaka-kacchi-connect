@@ -10,7 +10,7 @@ import { CTASection } from "@/components/sections/CTASection";
 import { SocialSection } from "@/components/sections/SocialSection";
 import { whyUs } from "@/content/whyUs";
 import { canonical } from "@/lib/seo";
-import kacchiBorhani from "@/assets/Kacchi-and-Borhani.png";
+import kacchiBorhani from "@/assets/Kacchi-and-Borhani.jpg";
 
 export const Route = createFileRoute("/")({
   head: () => ({
