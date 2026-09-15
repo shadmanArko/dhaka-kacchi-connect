@@ -57,14 +57,47 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
   // Forgot-password field
   const [forgotEmail, setForgotEmail] = useState("");
 
+  /**
+   * Clears everything EXCEPT the eight non-secret registration fields.
+   *
+   * Those survive on purpose: registration is nine fields long, an accidental
+   * X on a phone is easy, and losing that much typing is exactly how someone
+   * abandons the order. The PASSWORD is the one deliberate exception - leave
+   * it and a password the customer typed sits in a live DOM input for the
+   * rest of the page's life, inside a modal they believe they dismissed, and
+   * reopening shows it pre-filled and submittable.
+   *
+   * Retyping it costs them nothing, because a pending registration lives in
+   * an OTP row rather than in `customers` (see the register handler in
+   * worker/src/index.ts): `phoneOrEmailTaken` does not fire for an unverified
+   * registrant, so re-submitting supersedes the pending record with a new
+   * code and the newly typed password.
+   */
   function reset() {
     setStep("start");
     setError("");
     setNotice("");
     setLoginIdentifier("");
     setLoginPassword("");
+    setPassword("");
     setCode("");
     setForgotEmail("");
+  }
+
+  /**
+   * After a real login there is no draft left to come back to, so the rest of
+   * the registration PII goes too rather than lingering in memory - and in the
+   * DOM - for the remainder of the session.
+   */
+  function resetRegistrationDraft() {
+    setPhone("");
+    setName("");
+    setDateOfBirth("");
+    setStreet("");
+    setHouseNumber("");
+    setPostalCode("");
+    setCity("Berlin");
+    setEmail("");
   }
 
   function close() {
@@ -84,6 +117,7 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
       });
       session.login(result.token, result.customer);
       trackEvent("auth_login_succeeded");
+      resetRegistrationDraft();
       close();
     } catch (err) {
       setError(
@@ -142,6 +176,7 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
       const result = await api.verifyOtp({ phone: phone.trim(), code: code.trim() });
       session.login(result.token, result.customer);
       trackEvent("auth_otp_verified");
+      resetRegistrationDraft();
       close();
     } catch (err) {
       setError(

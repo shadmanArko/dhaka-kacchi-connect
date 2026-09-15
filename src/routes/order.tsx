@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { formatEuro, formatDate } from "@/lib/format";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { MessageCircle } from "lucide-react";
+import { MessageCircle, RefreshCw } from "lucide-react";
+import * as Sentry from "@sentry/react";
 import { PageHero } from "@/components/sections/PageHero";
 import { Reveal } from "@/components/ui/Reveal";
 import { CheckoutAuthModal } from "@/components/auth/CheckoutAuthModal";
@@ -112,8 +113,14 @@ function OrderPage() {
   // Set only when a restored cart had to be changed on the customer's behalf
   // (currently: its Saturday is no longer offered).
   const [cartNotice, setCartNotice] = useState("");
+  // Bumped by the "Try again" button below. The whole load effect is keyed on
+  // it, so a retry re-runs the fetch AND the cart restore that depends on it -
+  // correct here precisely because the restore never ran on a failed attempt,
+  // so there is no restored state to clobber.
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   useEffect(() => {
+    setLoadState("loading");
     Promise.all([api.getMenu(), api.getAvailability()])
       .then(([menuRes, datesRes]) => {
         setMenu(menuRes.items);
@@ -172,8 +179,15 @@ function OrderPage() {
 
         setLoadState("ready");
       })
-      .catch(() => setLoadState("error"));
-  }, []);
+      // This catch sits downstream of the whole `.then()` body, not just the
+      // two fetches, so a bug in the restore/validation code above lands here
+      // too and shows the customer "the server is unavailable" - a diagnosis
+      // that is both wrong and unfalsifiable from the outside. Report it.
+      .catch((err) => {
+        Sentry.captureException(err, { tags: { area: "order-page-load" } });
+        setLoadState("error");
+      });
+  }, [loadAttempt]);
 
   // Mirror of the restore above. Deliberately gated on loadState: before the
   // restore has run the form is still empty, and saving that would wipe the
@@ -540,8 +554,24 @@ function OrderPage() {
           {loadState === "error" && (
             <div className="text-center">
               <p className="font-sans text-[0.96rem] text-muted-warm mb-8">
-                The online order form isn't available right now. Order via WhatsApp instead — we'll
-                confirm your Saturday pickup or delivery manually.
+                The online order form didn't load. This is usually a temporary connection problem —
+                try again, or order via WhatsApp and we'll confirm your Saturday pickup or delivery
+                manually.
+              </p>
+              {/* Retry comes FIRST, and is the primary action. The only escape
+                  used to be WhatsApp, which meant a one-second network blip
+                  pushed a customer off the online form for good unless they
+                  thought to reload the page themselves. */}
+              <button
+                type="button"
+                onClick={() => setLoadAttempt((n) => n + 1)}
+                className="inline-flex items-center gap-3 border border-gold px-12 py-5 font-sans text-[0.8rem] uppercase tracking-[0.25em] text-gold transition-colors hover:bg-gold hover:text-black-ink"
+              >
+                <RefreshCw size={18} aria-hidden="true" />
+                <span>Try again</span>
+              </button>
+              <p className="mt-10 mb-5 font-sans text-[0.8rem] text-muted-warm">
+                Still not working?
               </p>
               <a
                 href={buildWaLink("Hi Dhaka Kacchi — I'd like to order.")}
