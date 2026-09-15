@@ -7,6 +7,7 @@ import { CheckoutAuthModal } from "@/components/auth/CheckoutAuthModal";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useSession } from "@/hooks/useSession";
 import { buildWaLink } from "@/lib/whatsapp";
+import { readCart, writeCart, clearCart } from "@/lib/cart";
 import { trackEvent } from "@/lib/analytics";
 import { canonical } from "@/lib/seo";
 import {
@@ -113,17 +114,107 @@ function OrderPage() {
   // Fires once per visit, the moment the cart goes from empty to non-empty -
   // the top of the order funnel.
   const [cartStartTracked, setCartStartTracked] = useState(false);
+  // Set only when a restored cart had to be changed on the customer's behalf
+  // (currently: its Saturday is no longer offered).
+  const [cartNotice, setCartNotice] = useState("");
 
   useEffect(() => {
     Promise.all([api.getMenu(), api.getAvailability()])
       .then(([menuRes, datesRes]) => {
         setMenu(menuRes.items);
         setDates(datesRes.dates);
-        setDeliveryDate(datesRes.dates[0] ?? "");
+
+        // The saved cart is restored HERE, inside this resolution, rather than
+        // in its own mount effect. Two reasons, both load-bearing: validating
+        // it needs the menu and the availability list, which only exist at
+        // this point; and this effect used to unconditionally overwrite
+        // deliveryDate, so restoring anywhere else would be racing it rather
+        // than replacing it.
+        const saved = readCart();
+        const menuSkus = new Set(menuRes.items.map((item) => item.sku));
+        // Drop anything no longer on the menu. itemCount counts `quantities`
+        // directly while subtotalCents sums over `menu`, so a stale SKU would
+        // otherwise show up in the item count while contributing EUR 0.
+        const restoredQuantities = saved
+          ? Object.fromEntries(
+              Object.entries(saved.quantities).filter(
+                ([sku, qty]) => menuSkus.has(sku) && Number.isFinite(qty) && qty > 0,
+              ),
+            )
+          : {};
+        const hasRestoredItems = Object.keys(restoredQuantities).length > 0;
+
+        if (saved && hasRestoredItems) {
+          setQuantities(restoredQuantities);
+          setFulfillmentType(saved.fulfillmentType === "delivery" ? "delivery" : "pickup");
+          setStreet(saved.street);
+          setHouseNumber(saved.houseNumber);
+          setPostalCode(saved.postalCode);
+          setCity(saved.city);
+          setCustomerName(saved.customerName);
+          setNotes(saved.notes);
+          // Restores the prefill guard too, so the session-prefill effect
+          // below doesn't re-stomp an address the customer edited before they
+          // left. (A cart saved while logged out carries null here, so logging
+          // in afterwards still prefills from the account - unchanged.)
+          setPrefilledForCustomerId(saved.prefilledForCustomerId);
+          // Not a new cart: don't re-fire the funnel-top event on every reload.
+          setCartStartTracked(true);
+        } else if (saved) {
+          clearCart();
+        }
+
+        // A saved cart is pinned to one specific Saturday, which goes stale
+        // every week. Silently sliding someone to a different week is how a
+        // customer ends up expecting food on the wrong day, so say so.
+        const savedDateStillOffered = !!saved && datesRes.dates.includes(saved.deliveryDate);
+        setDeliveryDate(savedDateStillOffered ? saved.deliveryDate : (datesRes.dates[0] ?? ""));
+        if (saved && hasRestoredItems && !savedDateStillOffered) {
+          setCartNotice(
+            "We saved your basket, but the Saturday you picked isn't available any more — we've moved it to the next one. Check the date before you order.",
+          );
+        }
+
         setLoadState("ready");
       })
       .catch(() => setLoadState("error"));
   }, []);
+
+  // Mirror of the restore above. Deliberately gated on loadState: before the
+  // restore has run the form is still empty, and saving that would wipe the
+  // very cart we're about to read.
+  useEffect(() => {
+    if (loadState !== "ready" || submitState === "success") return;
+    if (!Object.values(quantities).some((qty) => qty > 0)) {
+      clearCart();
+      return;
+    }
+    writeCart({
+      quantities,
+      deliveryDate,
+      fulfillmentType,
+      street,
+      houseNumber,
+      postalCode,
+      city,
+      customerName,
+      notes,
+      prefilledForCustomerId,
+    });
+  }, [
+    loadState,
+    submitState,
+    quantities,
+    deliveryDate,
+    fulfillmentType,
+    street,
+    houseNumber,
+    postalCode,
+    city,
+    customerName,
+    notes,
+    prefilledForCustomerId,
+  ]);
 
   // Fills in name/address from the account the moment a session exists -
   // whether that's a fresh login/registration just now, or a stored session
@@ -281,6 +372,9 @@ function OrderPage() {
       );
       setResult(res);
       setSubmitState("success");
+      // The order exists now - a restored basket on the next visit would be a
+      // duplicate waiting to happen.
+      clearCart();
       trackEvent("order_submitted", { fulfillmentType, totalCents, itemCount });
     } catch (err) {
       setSubmitState("error");
@@ -386,6 +480,11 @@ function OrderPage() {
 
           {loadState === "ready" && (
             <form onSubmit={onSubmit} className="space-y-10">
+              {cartNotice && (
+                <p className="border border-gold/40 bg-gold/[0.06] px-5 py-4 font-sans text-[0.85rem] leading-relaxed text-cream">
+                  {cartNotice}
+                </p>
+              )}
               {session.customer && (
                 <div className="flex items-center justify-between font-sans text-[0.78rem] text-muted-warm">
                   <span>
