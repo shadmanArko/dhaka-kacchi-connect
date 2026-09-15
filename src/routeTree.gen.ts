@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as SubscribeRouteImport } from './routes/subscribe'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as PrivacyRouteImport } from './routes/privacy'
+import { Route as OrdersRouteImport } from './routes/orders'
 import { Route as OrderRouteImport } from './routes/order'
 import { Route as HistoryRouteImport } from './routes/history'
 import { Route as AboutRouteImport } from './routes/about'
@@ -34,6 +35,11 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
 const PrivacyRoute = PrivacyRouteImport.update({
   id: '/privacy',
   path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OrdersRoute = OrdersRouteImport.update({
+  id: '/orders',
+  path: '/orders',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OrderRoute = OrderRouteImport.update({
@@ -82,6 +88,7 @@ export interface FileRoutesByFullPath {
   '/about': typeof AboutRoute
   '/history': typeof HistoryRoute
   '/order': typeof OrderRoute
+  '/orders': typeof OrdersRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/subscribe': typeof SubscribeRoute
@@ -95,6 +102,7 @@ export interface FileRoutesByTo {
   '/about': typeof AboutRoute
   '/history': typeof HistoryRoute
   '/order': typeof OrderRoute
+  '/orders': typeof OrdersRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/subscribe': typeof SubscribeRoute
@@ -108,6 +116,7 @@ export interface FileRoutesById {
   '/about': typeof AboutRoute
   '/history': typeof HistoryRoute
   '/order': typeof OrderRoute
+  '/orders': typeof OrdersRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/subscribe': typeof SubscribeRoute
@@ -123,6 +132,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/history'
     | '/order'
+    | '/orders'
     | '/privacy'
     | '/reset-password'
     | '/subscribe'
@@ -136,6 +146,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/history'
     | '/order'
+    | '/orders'
     | '/privacy'
     | '/reset-password'
     | '/subscribe'
@@ -148,6 +159,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/history'
     | '/order'
+    | '/orders'
     | '/privacy'
     | '/reset-password'
     | '/subscribe'
@@ -162,6 +174,7 @@ export interface RootRouteChildren {
   AboutRoute: typeof AboutRoute
   HistoryRoute: typeof HistoryRoute
   OrderRoute: typeof OrderRoute
+  OrdersRoute: typeof OrdersRoute
   PrivacyRoute: typeof PrivacyRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SubscribeRoute: typeof SubscribeRoute
@@ -189,6 +202,13 @@ declare module '@tanstack/react-router' {
       path: '/privacy'
       fullPath: '/privacy'
       preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/orders': {
+      id: '/orders'
+      path: '/orders'
+      fullPath: '/orders'
+      preLoaderRoute: typeof OrdersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/order': {
@@ -271,6 +291,7 @@ const rootRouteChildren: RootRouteChildren = {
   AboutRoute: AboutRoute,
   HistoryRoute: HistoryRoute,
   OrderRoute: OrderRoute,
+  OrdersRoute: OrdersRoute,
   PrivacyRoute: PrivacyRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SubscribeRoute: SubscribeRoute,

@@ -3,6 +3,7 @@ import { Link, useLocation } from "@tanstack/react-router";
 import { Menu, X } from "lucide-react";
 import { nav, orderCTA, site } from "@/content/site";
 import { useScrolled } from "@/hooks/useScrolled";
+import { useSession } from "@/hooks/useSession";
 import { cn } from "@/lib/utils";
 import logo from "@/assets/logo-nav.png";
 
@@ -10,6 +11,7 @@ export function SiteHeader() {
   const scrolled = useScrolled();
   const [open, setOpen] = useState(false);
   const { pathname } = useLocation();
+  const session = useSession();
 
   useEffect(() => setOpen(false), [pathname]);
   useEffect(() => {
@@ -52,6 +54,21 @@ export function SiteHeader() {
               {item.label}
             </Link>
           ))}
+          {/* Signed-in customers only. The page redirects anyone else away, so
+              showing this to a logged-out visitor would just be a dead end.
+              `nav` in content/site.ts stays static - it's shared with the
+              mobile menu and has no notion of a session. */}
+          {session.customer && (
+            <Link
+              to="/orders"
+              search={{ order: undefined }}
+              activeProps={{ className: "text-gold" }}
+              inactiveProps={{ className: "text-muted-warm hover:text-gold" }}
+              className="font-sans text-[0.72rem] uppercase tracking-[0.15em] transition-colors whitespace-nowrap"
+            >
+              My Orders
+            </Link>
+          )}
           <Link
             to={orderCTA.to}
             className="inline-flex items-center gap-2 border border-gold text-gold px-6 py-2.5 font-sans text-[0.72rem] uppercase tracking-[0.15em] transition-colors hover:bg-gold hover:text-black-ink"

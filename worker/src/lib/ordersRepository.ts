@@ -26,7 +26,16 @@ export interface OrdersRepository {
    * ("YYYY-MM-DD"), items included, ordered by date then creation time - used
    * by the Telegram "upcoming orders" webhook (telegram.ts). */
   listOrdersFromDate(fromDate: string): Promise<OrderRecord[]>;
+  /** A customer's own order history, newest first, items included. Cancelled
+   * orders are INCLUDED on purpose - a customer needs to be able to see that
+   * an order was cancelled, which is the opposite of what listOrdersFromDate
+   * wants for the Telegram digest. Unbounded: at one batch a week this is a
+   * handful of rows per customer, so there is no pagination here yet. */
+  listByCustomerId(customerId: string): Promise<OrderRecord[]>;
   /** Admin panel only, below this line. */
+  /** NOTE: takes only an id and performs NO ownership check. Any
+   * customer-facing caller MUST compare the returned order's customerId
+   * against the session's own customer id before handing it back. */
   findById(id: string): Promise<OrderRecord | null>;
   /** Every filter is optional and ANDed together - the admin dashboard's
    * search/filter. `search` matches customer name or phone. */
@@ -202,6 +211,17 @@ async function listOrdersFromDate(pool: Pool, fromDate: string): Promise<OrderRe
   return attachItems(pool, ordersResult.rows);
 }
 
+/** customer_id is mandatory here, so it's a plain equality rather than the
+ * `$n::text IS NULL OR ...` optional-filter idiom used by listAll - this
+ * query must never be able to degrade into "all orders". */
+async function listByCustomerId(pool: Pool, customerId: string): Promise<OrderRecord[]> {
+  const ordersResult = await pool.query<OrderRow>(
+    "SELECT * FROM orders WHERE customer_id = $1 ORDER BY created_at DESC",
+    [customerId],
+  );
+  return attachItems(pool, ordersResult.rows);
+}
+
 async function findById(pool: Pool, id: string): Promise<OrderRecord | null> {
   const result = await pool.query<OrderRow>("SELECT * FROM orders WHERE id = $1", [id]);
   const row = result.rows[0];
@@ -271,6 +291,7 @@ export function createPostgresOrdersRepository(pool: Pool): OrdersRepository {
         .then(() => undefined),
     listOrdersForDeliveryDate: (deliveryDate) => listOrdersForDeliveryDate(pool, deliveryDate),
     listOrdersFromDate: (fromDate) => listOrdersFromDate(pool, fromDate),
+    listByCustomerId: (customerId) => listByCustomerId(pool, customerId),
     findById: (id) => findById(pool, id),
     listAll: (filters) => listAll(pool, filters),
     applyDiscount: (orderId, discount) => applyDiscount(pool, orderId, discount),

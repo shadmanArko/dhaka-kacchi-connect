@@ -242,6 +242,25 @@ export type AdminOrderItem = {
   quantity: number;
 };
 
+/** An order as its own customer sees it - narrower than AdminOrder, which
+ * also carries the customer's own contact details and internal fields. */
+export type CustomerOrder = {
+  id: string;
+  createdAt: string;
+  deliveryDate: string;
+  fulfillmentType: "pickup" | "delivery";
+  address: DeliveryAddressInput | null;
+  distanceKm: number | null;
+  subtotalCents: number;
+  deliveryFeeCents: number;
+  discountCents: number;
+  discountReason: string | null;
+  totalCents: number;
+  status: OrderStatus;
+  notes: string | null;
+  items: { sku: string; name: string; unitPriceCents: number; quantity: number }[];
+};
+
 export type AdminOrder = {
   id: string;
   createdAt: string;
@@ -373,6 +392,15 @@ export const api = {
     apiFetch<void>("/v1/auth/logout", { method: "POST", headers: authHeader(token) }),
   getMe: (token: string) =>
     apiFetch<{ customer: PublicCustomer }>("/v1/me", { headers: authHeader(token) }),
+  // The customer's own order history. The backend scopes both of these to the
+  // session's customer id - getMyOrder returns 404 (never 403) for someone
+  // else's order, so an id can't be used to probe for existence.
+  listMyOrders: (token: string) =>
+    apiFetch<{ orders: CustomerOrder[] }>("/v1/orders", { headers: authHeader(token) }),
+  getMyOrder: (token: string, orderId: string) =>
+    apiFetch<{ order: CustomerOrder }>(`/v1/orders/${encodeURIComponent(orderId)}`, {
+      headers: authHeader(token),
+    }),
   requestPasswordReset: (email: string) =>
     apiFetch<{ message: string }>(
       "/v1/auth/password-reset/request",

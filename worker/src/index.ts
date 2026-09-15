@@ -73,6 +73,8 @@ import {
   LoginInputSchema,
   MenuItemSchema,
   MeResultSchema,
+  CustomerOrderListResponseSchema,
+  CustomerOrderResultSchema,
   MessageResultSchema,
   OrderInputSchema,
   OrderResultSchema,
@@ -195,6 +197,11 @@ const v1 = new OpenAPIHono<{ Variables: AuthVariables }>();
 // authMiddleware.ts. Registered before the routes they guard, since Hono
 // composes middleware and handlers for a path in registration order.
 v1.use("/orders", requireAuth(sessionsRepository));
+// Hono matches these paths EXACTLY - "/orders" above does not cover
+// "/orders/:id". Without this second line the order-detail route below would
+// be completely unauthenticated, letting anyone read any order by guessing an
+// id. The admin app needs the same pair for the same reason.
+v1.use("/orders/*", requireAuth(sessionsRepository));
 v1.use("/me", requireAuth(sessionsRepository));
 v1.use("/auth/logout", requireAuth(sessionsRepository));
 
@@ -872,6 +879,87 @@ v1.openapi(ordersRoute, async (c) => {
     },
     201,
   );
+});
+
+/** An OrderRecord as its OWN customer sees it. Deliberately not toAdminOrder:
+ * that shape carries the customer's name/email/phone and createdBy, none of
+ * which this caller needs handed back to them. Always includes totalCents()
+ * rather than making the client recompute it. */
+function toCustomerOrder(order: OrderRecord) {
+  return {
+    id: order.id,
+    createdAt: order.createdAt,
+    deliveryDate: order.deliveryDate,
+    fulfillmentType: order.fulfillmentType,
+    address: order.address,
+    distanceKm: order.distanceKm,
+    subtotalCents: order.subtotalCents,
+    deliveryFeeCents: order.deliveryFeeCents,
+    discountCents: order.discountCents,
+    discountReason: order.discountReason,
+    totalCents: totalCents(order),
+    status: order.status,
+    notes: order.notes,
+    items: order.items,
+  };
+}
+
+const listMyOrdersRoute = createRoute({
+  method: "get",
+  path: "/orders",
+  operationId: "listMyOrders",
+  summary: "List the signed-in customer's own orders",
+  security: [{ bearerAuth: [] }],
+  responses: {
+    200: {
+      content: { "application/json": { schema: CustomerOrderListResponseSchema } },
+      description: "The customer's orders, newest first.",
+    },
+    401: {
+      content: { "application/json": { schema: ErrorResponseSchema } },
+      description: "Not signed in.",
+    },
+  },
+});
+
+v1.openapi(listMyOrdersRoute, async (c) => {
+  const orders = await ordersRepository.listByCustomerId(c.get("customerId"));
+  return c.json({ orders: orders.map(toCustomerOrder) }, 200);
+});
+
+const getMyOrderRoute = createRoute({
+  method: "get",
+  path: "/orders/{id}",
+  operationId: "getMyOrder",
+  summary: "Get one of the signed-in customer's own orders",
+  security: [{ bearerAuth: [] }],
+  request: { params: z.object({ id: z.string() }) },
+  responses: {
+    200: {
+      content: { "application/json": { schema: CustomerOrderResultSchema } },
+      description: "The order.",
+    },
+    401: {
+      content: { "application/json": { schema: ErrorResponseSchema } },
+      description: "Not signed in.",
+    },
+    404: {
+      content: { "application/json": { schema: ErrorResponseSchema } },
+      description: "No such order, or it belongs to someone else.",
+    },
+  },
+});
+
+v1.openapi(getMyOrderRoute, async (c) => {
+  const { id } = c.req.valid("param");
+  const order = await ordersRepository.findById(id);
+  // findById does no ownership check of its own, so it happens here. A
+  // mismatch returns 404, NOT 403: a 403 would confirm that an order with
+  // this id exists, which is exactly what someone enumerating ids wants.
+  if (!order || order.customerId !== c.get("customerId")) {
+    return c.json({ error: "not_found", message: "Order not found." }, 404);
+  }
+  return c.json({ order: toCustomerOrder(order) }, 200);
 });
 
 // --- Admin panel ---------------------------------------------------------

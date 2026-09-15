@@ -26,6 +26,10 @@ const ROUTES = [
   "/subscribe",
   "/reset-password",
   "/privacy",
+  // Signed-in-only, but still a real static path that must exist on the host -
+  // the gate is client-side (see the route's own comment), so the HTML has to
+  // be there for the redirect to be able to run at all.
+  "/orders",
   // Admin panel - all three are static/enumerable paths (no dynamic
   // segment). Order detail/discount/status editing is deliberately a
   // panel on /admin driven by a `?order=` search param, not its own
@@ -47,7 +51,9 @@ const SITE_URL = "https://dhakakacchi.com";
 // routeTree.gen.ts or checkRoutesComplete() below stops working.
 //   /admin*         - internal tooling, also noindexed (routes/admin/_layout.tsx)
 //   /reset-password - reachable only from an emailed token link, also noindexed
-const isExcludedFromSitemap = (route) => route.startsWith("/admin") || route === "/reset-password";
+//   /orders         - a signed-in customer's own history, also noindexed
+const isExcludedFromSitemap = (route) =>
+  route.startsWith("/admin") || route === "/reset-password" || route === "/orders";
 
 // Slash-terminated, because LiteSpeed's DirectorySlash 301s /about -> /about/
 // and that redirect target is the URL Google actually lands on. Must stay

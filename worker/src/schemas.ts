@@ -231,6 +231,50 @@ export const MessageResultSchema = z
 
 const OrderStatusSchema = z.enum(["received", "confirmed", "delivered", "cancelled"]);
 
+// A customer looking at their OWN order history. Deliberately narrower than
+// AdminOrderSchema: no customerName/Email/Phone (they are the customer), no
+// createdBy (an internal distinction), no address lat/lng. discountReason IS
+// included - it's their own discount and they should be able to see why.
+export const CustomerOrderItemSchema = z
+  .object({
+    sku: z.string(),
+    name: z.string(),
+    unitPriceCents: z.number().int(),
+    quantity: z.number().int(),
+  })
+  .openapi("CustomerOrderItem");
+
+export const CustomerOrderSchema = z
+  .object({
+    id: z.string(),
+    createdAt: z.string(),
+    deliveryDate: z.string(),
+    fulfillmentType: z.enum(["pickup", "delivery"]),
+    address: DeliveryAddressSchema.nullable(),
+    distanceKm: z.number().nullable(),
+    subtotalCents: z.number().int(),
+    deliveryFeeCents: z.number().int(),
+    discountCents: z.number().int(),
+    discountReason: z.string().nullable(),
+    totalCents: z.number().int(),
+    status: OrderStatusSchema,
+    notes: z.string().nullable(),
+    items: z.array(CustomerOrderItemSchema),
+  })
+  .openapi("CustomerOrder");
+
+export const CustomerOrderListResponseSchema = z
+  .object({
+    orders: z.array(CustomerOrderSchema),
+  })
+  .openapi("CustomerOrderListResponse");
+
+export const CustomerOrderResultSchema = z
+  .object({
+    order: CustomerOrderSchema,
+  })
+  .openapi("CustomerOrderResult");
+
 export const AdminLoginInputSchema = z
   .object({
     email: z.string().email(),

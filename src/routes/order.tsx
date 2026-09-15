@@ -511,10 +511,17 @@ function OrderPage() {
               or email {site.email}
             </a>
             <Link
-              to="/"
+              to="/orders"
+              search={{ order: result.orderId }}
               className="mt-2 inline-flex items-center gap-4 font-sans text-[0.8rem] tracking-[0.25em] uppercase font-normal transition-all duration-300 no-underline border border-gold/40 text-cream px-9 py-[18px] hover:border-gold hover:text-gold hover:-translate-y-0.5"
             >
-              <span>Back to Home</span>
+              <span>View your orders</span>
+            </Link>
+            <Link
+              to="/"
+              className="font-sans text-[0.8rem] text-muted-warm underline underline-offset-4 hover:text-cream transition-colors"
+            >
+              Back to home
             </Link>
           </div>
         </div>
