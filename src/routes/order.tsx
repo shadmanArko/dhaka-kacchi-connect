@@ -8,6 +8,7 @@ import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useSession } from "@/hooks/useSession";
 import { buildWaLink } from "@/lib/whatsapp";
 import { readCart, writeCart, clearCart } from "@/lib/cart";
+import { site } from "@/content/site";
 import { trackEvent } from "@/lib/analytics";
 import { canonical } from "@/lib/seo";
 import {
@@ -105,6 +106,12 @@ function OrderPage() {
   // the button agree with that advice instead of contradicting it.
   const [submitTimedOut, setSubmitTimedOut] = useState(false);
   const [result, setResult] = useState<OrderResult | null>(null);
+  // Captured at submit time so the confirmation screen can list what was
+  // ordered - the API response has no line items, and the cart is cleared the
+  // moment the order succeeds.
+  const [submittedItems, setSubmittedItems] = useState<
+    { name: string; quantity: number; lineCents: number }[]
+  >([]);
 
   const [authModalOpen, setAuthModalOpen] = useState(false);
   // Tracks which logged-in customer the form fields were last prefilled
@@ -371,6 +378,18 @@ function OrderPage() {
         session.token,
       );
       setResult(res);
+      // Snapshot what was ordered BEFORE the cart is cleared below. The API
+      // response carries no line items, and this costs no backend change -
+      // it just has to happen while `quantities` is still populated.
+      setSubmittedItems(
+        menu
+          .filter((item) => (quantities[item.sku] ?? 0) > 0)
+          .map((item) => ({
+            name: item.name,
+            quantity: quantities[item.sku] ?? 0,
+            lineCents: (quantities[item.sku] ?? 0) * item.priceCents,
+          })),
+      );
       setSubmitState("success");
       // The order exists now - a restored basket on the next visit would be a
       // duplicate waiting to happen.
@@ -426,15 +445,78 @@ function OrderPage() {
             Total: <strong className="text-cream">{formatEuro(result.totalCents)}</strong> — cash on
             delivery.
           </p>
-          <p className="font-sans text-[0.8rem] text-muted-warm mb-8">
-            Order reference: {result.orderId}
+          {/* The address the food is actually going to. Rendered only when the
+              backend sends it, so this build works against a worker that
+              hasn't deployed the field yet - the two ship separately. */}
+          {result.fulfillmentType === "delivery" && result.address && (
+            <p className="font-sans text-[0.9rem] leading-[1.9] text-muted-warm mb-8">
+              Delivering to
+              <br />
+              <strong className="text-cream">
+                {result.address.street} {result.address.houseNumber}
+              </strong>
+              <br />
+              <strong className="text-cream">
+                {result.address.postalCode} {result.address.city}
+              </strong>
+            </p>
+          )}
+
+          {submittedItems.length > 0 && (
+            <ul className="mx-auto mb-8 max-w-[360px] border-y border-line divide-y divide-line">
+              {submittedItems.map((item) => (
+                <li
+                  key={item.name}
+                  className="flex items-center justify-between gap-4 py-3 font-sans text-[0.85rem]"
+                >
+                  <span className="text-muted-warm">
+                    {item.quantity}× {item.name}
+                  </span>
+                  <span className="text-cream">{formatEuro(item.lineCents)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <p className="font-sans text-[0.85rem] leading-[1.9] text-muted-warm mb-8">
+            A confirmation email is on its way to{" "}
+            <strong className="text-cream">{session.customer?.email}</strong>. Pay in cash when you{" "}
+            {result.fulfillmentType === "pickup" ? "collect" : "receive"} your order. Need to change
+            anything? Message us before <strong className="text-cream">Friday 6pm</strong>.
           </p>
-          <Link
-            to="/"
-            className="inline-flex items-center gap-4 font-sans text-[0.8rem] tracking-[0.25em] uppercase font-normal transition-all duration-300 no-underline border border-gold/40 text-cream px-9 py-[18px] hover:border-gold hover:text-gold hover:-translate-y-0.5"
-          >
-            <span>Back to Home</span>
-          </Link>
+
+          <p className="font-sans text-[0.8rem] text-muted-warm mb-8">
+            Order reference: <span className="text-cream">{result.orderId}</span>
+          </p>
+
+          {/* The failure path has always offered a way to reach a human; the
+              success path offered none, which is backwards - this is the
+              screen a customer is on when they spot a wrong address. */}
+          <div className="flex flex-col items-center gap-4">
+            <a
+              href={buildWaLink(
+                `Hi Dhaka Kacchi — about my order ${result.orderId} for ${formatDate(result.deliveryDate)}.`,
+              )}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-3 bg-[#25D366] text-white px-8 py-4 font-sans text-[0.78rem] uppercase tracking-[0.2em] transition-all hover:-translate-y-0.5 hover:bg-[#1da851]"
+            >
+              <MessageCircle size={18} />
+              <span>Message us on WhatsApp</span>
+            </a>
+            <a
+              href={`mailto:${site.email}?subject=${encodeURIComponent(`Order ${result.orderId}`)}`}
+              className="font-sans text-[0.8rem] text-muted-warm underline underline-offset-4 hover:text-cream transition-colors"
+            >
+              or email {site.email}
+            </a>
+            <Link
+              to="/"
+              className="mt-2 inline-flex items-center gap-4 font-sans text-[0.8rem] tracking-[0.25em] uppercase font-normal transition-all duration-300 no-underline border border-gold/40 text-cream px-9 py-[18px] hover:border-gold hover:text-gold hover:-translate-y-0.5"
+            >
+              <span>Back to Home</span>
+            </Link>
+          </div>
         </div>
       </section>
     );

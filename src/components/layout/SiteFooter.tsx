@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { site } from "@/content/site";
+import { buildWaLink } from "@/lib/whatsapp";
 import logo from "@/assets/logo-nav.png";
 
 export function SiteFooter() {
@@ -27,6 +28,18 @@ export function SiteFooter() {
       <div className="font-sans text-[0.76rem] leading-[1.8] text-muted-warm md:text-right text-center">
         <a href={`mailto:${site.email}`} className="text-gold no-underline hover:underline">
           {site.email}
+        </a>
+        <br />
+        {/* The only contact channel reachable from every page. FloatingSocial
+            is desktop-only and carries no WhatsApp, so before this the footer
+            offered a mobile customer nothing but an email address. */}
+        <a
+          href={buildWaLink()}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-gold no-underline hover:underline"
+        >
+          WhatsApp us
         </a>
         <br />
         <span>{site.website} · Berlin</span>

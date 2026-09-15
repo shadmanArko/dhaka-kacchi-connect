@@ -61,6 +61,10 @@ export async function sendConfirmationEmail(order: OrderRecord): Promise<boolean
       `Total: €${(totalCents(order) / 100).toFixed(2)} (cash on delivery)`,
       fulfillmentLine(order),
       "",
+      // The confirmation screen shows this reference; without it here, a
+      // customer who closes the tab has nothing to quote back to us.
+      `Order reference: ${order.id}`,
+      "",
       "See you then!",
       "Dhaka Kacchi Berlin",
     ].join("\n"),

@@ -110,6 +110,10 @@ export const OrderResultSchema = z
     orderId: z.string().openapi({ example: "ord_2f2db69b-a757-4f0d-9ff8-33eee670647f" }),
     deliveryDate: z.string(),
     fulfillmentType: z.enum(["pickup", "delivery"]),
+    // Echoed back so the confirmation screen can show the address the food is
+    // actually going to - the last moment a typo is still catchable. Null for
+    // pickup, which carries no address.
+    address: DeliveryAddressSchema.nullable(),
     distanceKm: z.number().nullable(),
     subtotalCents: z.number().int(),
     deliveryFeeCents: z.number().int(),

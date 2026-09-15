@@ -863,6 +863,7 @@ v1.openapi(ordersRoute, async (c) => {
       orderId: order.id,
       deliveryDate: order.deliveryDate,
       fulfillmentType: order.fulfillmentType,
+      address: order.address,
       distanceKm: order.distanceKm,
       subtotalCents: order.subtotalCents,
       deliveryFeeCents: order.deliveryFeeCents,

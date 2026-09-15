@@ -187,6 +187,12 @@ export type OrderResult = {
   orderId: string;
   deliveryDate: string;
   fulfillmentType: "pickup" | "delivery";
+  /** Optional rather than required on purpose: the frontend and the worker
+   * deploy through separate pipelines, so a build of this app can be live
+   * against a backend that doesn't send `address` yet. The confirmation
+   * screen renders it only when present, which means the two deploys can
+   * land in either order without a broken window. */
+  address?: DeliveryAddressInput | null;
   distanceKm: number | null;
   subtotalCents: number;
   deliveryFeeCents: number;
