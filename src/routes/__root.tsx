@@ -127,34 +127,51 @@ function RootShell({ children }: { children: ReactNode }) {
 // server-side prerender pass this app's build relies on (see
 // scripts/build-static.mjs), so PostHog's browser-only SDK never executes
 // in that Node environment.
+//
+// /admin/* is deliberately excluded from trackPageview - the owner's own
+// use of the internal admin panel isn't a customer funnel event and would
+// only pollute customer-facing PostHog analytics.
 function Analytics() {
   const { pathname } = useLocation();
+  const isAdminRoute = pathname.startsWith("/admin");
 
   useEffect(() => {
     initAnalytics();
   }, []);
 
   useEffect(() => {
-    trackPageview();
-  }, [pathname]);
+    if (!isAdminRoute) trackPageview();
+  }, [pathname, isAdminRoute]);
 
   return null;
 }
 
+// The marketing chrome (nav, WhatsApp bubble, cookie banner, footer) makes
+// no sense wrapping the admin panel - it's an internal tool behind its own
+// login, not a page a visitor should see with a "subscribe"/social-share
+// bar around it. There's no other route-based branching mechanism in this
+// app, so this one pathname check is it - see routes/admin/_layout.tsx for
+// the admin section's own (much simpler) chrome.
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const { pathname } = useLocation();
+  const isAdminRoute = pathname.startsWith("/admin");
 
   return (
     <QueryClientProvider client={queryClient}>
       <SessionProvider>
         <Analytics />
-        <SiteHeader />
-        <FloatingSocial />
-        <ConsentBanner />
+        {!isAdminRoute && (
+          <>
+            <SiteHeader />
+            <FloatingSocial />
+            <ConsentBanner />
+          </>
+        )}
         <main>
           <Outlet />
         </main>
-        <SiteFooter />
+        {!isAdminRoute && <SiteFooter />}
       </SessionProvider>
     </QueryClientProvider>
   );

@@ -98,14 +98,24 @@ export function todayIsoDate(now: Date): string {
   return toIsoDate(todayFakeMs);
 }
 
-/** Validates that `dateStr` (YYYY-MM-DD) is a Saturday whose order cutoff hasn't passed. */
-export function isDeliveryDateStillOrderable(dateStr: string, now: Date): boolean {
+/** Validates only that `dateStr` (YYYY-MM-DD) is a real, well-formed
+ * Saturday - no cutoff check. Factored out of isDeliveryDateStillOrderable
+ * below for the admin panel's manual order creation, which deliberately
+ * skips the Friday-18:00 cutoff (staff recording a late phone order is
+ * exactly the point) but should still reject a non-Saturday/malformed date. */
+export function isValidSaturday(dateStr: string): boolean {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
   if (!match) return false;
   const [, y, m, d] = match;
   const candidateFakeMs = Date.UTC(Number(y), Number(m) - 1, Number(d));
-  const weekday = new Date(candidateFakeMs).getUTCDay();
-  if (weekday !== 6) return false; // must be a Saturday
+  return new Date(candidateFakeMs).getUTCDay() === 6;
+}
+
+/** Validates that `dateStr` (YYYY-MM-DD) is a Saturday whose order cutoff hasn't passed. */
+export function isDeliveryDateStillOrderable(dateStr: string, now: Date): boolean {
+  if (!isValidSaturday(dateStr)) return false;
+  const [, y, m, d] = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr)!;
+  const candidateFakeMs = Date.UTC(Number(y), Number(m) - 1, Number(d));
 
   const nowFakeMs = berlinWallClockFakeMs(now);
   return nowFakeMs < cutoffForSaturday(candidateFakeMs);

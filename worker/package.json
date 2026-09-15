@@ -12,6 +12,7 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "digest:weekly": "tsx scripts/weeklyDigest.ts",
     "telegram:set-webhook": "tsx scripts/setTelegramWebhook.ts",
+    "admin:create-user": "tsx scripts/createAdminUser.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

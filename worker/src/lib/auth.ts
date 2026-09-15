@@ -23,6 +23,9 @@ export const OTP_MAX_SENDS_PER_PHONE_PER_DAY = 10;
 export const OTP_MAX_SENDS_PER_IP_PER_HOUR = 10;
 
 export const SESSION_TTL_DAYS = 30;
+// Shorter than a customer session, given admin sessions carry a much
+// higher blast radius (discounts, order status, staff order creation).
+export const ADMIN_SESSION_TTL_DAYS = 7;
 
 export const PASSWORD_RESET_TTL_MINUTES = 60;
 

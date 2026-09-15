@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 import { withTransaction } from "../db";
-import type { OrderRecord } from "./orders";
+import type { OrderRecord, OrderStatus } from "./orders";
 
 /**
  * Everything a route handler needs to persist/read orders - and nothing
@@ -26,6 +26,22 @@ export interface OrdersRepository {
    * ("YYYY-MM-DD"), items included, ordered by date then creation time - used
    * by the Telegram "upcoming orders" webhook (telegram.ts). */
   listOrdersFromDate(fromDate: string): Promise<OrderRecord[]>;
+  /** Admin panel only, below this line. */
+  findById(id: string): Promise<OrderRecord | null>;
+  /** Every filter is optional and ANDed together - the admin dashboard's
+   * search/filter. `search` matches customer name or phone. */
+  listAll(filters?: {
+    deliveryDate?: string;
+    status?: OrderStatus;
+    search?: string;
+  }): Promise<OrderRecord[]>;
+  /** Replaces (never accumulates) the order's current discount - see
+   * orders.ts's OrderRecord comment. Pass discountCents: 0 to clear one. */
+  applyDiscount(
+    orderId: string,
+    discount: { discountCents: number; discountReason: string | null },
+  ): Promise<void>;
+  updateStatus(orderId: string, status: OrderStatus): Promise<void>;
 }
 
 type OrderRow = {
@@ -47,6 +63,11 @@ type OrderRow = {
   customer_phone: string;
   notes: string | null;
   subtotal_cents: number;
+  status: OrderStatus;
+  discount_cents: number;
+  discount_reason: string | null;
+  discounted_at: string | null;
+  created_by: "customer" | "staff";
 };
 
 type OrderItemRow = {
@@ -83,6 +104,11 @@ function rowToOrder(row: OrderRow, items: OrderRecord["items"]): OrderRecord {
     notes: row.notes,
     subtotalCents: row.subtotal_cents,
     items,
+    status: row.status,
+    discountCents: row.discount_cents,
+    discountReason: row.discount_reason,
+    discountedAt: row.discounted_at,
+    createdBy: row.created_by,
   };
 }
 
@@ -93,8 +119,9 @@ async function insertOrder(pool: Pool, order: OrderRecord): Promise<void> {
         (id, created_at, delivery_date, fulfillment_type,
          address_street, address_house_number, address_postal_code, address_city,
          address_lat, address_lng, distance_km, delivery_fee_cents,
-         customer_id, customer_name, customer_email, customer_phone, notes, subtotal_cents)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
+         customer_id, customer_name, customer_email, customer_phone, notes, subtotal_cents,
+         status, discount_cents, discount_reason, discounted_at, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)`,
       [
         order.id,
         order.createdAt,
@@ -114,6 +141,11 @@ async function insertOrder(pool: Pool, order: OrderRecord): Promise<void> {
         order.customerPhone,
         order.notes,
         order.subtotalCents,
+        order.status,
+        order.discountCents,
+        order.discountReason,
+        order.discountedAt,
+        order.createdBy,
       ],
     );
 
@@ -170,6 +202,53 @@ async function listOrdersFromDate(pool: Pool, fromDate: string): Promise<OrderRe
   return attachItems(pool, ordersResult.rows);
 }
 
+async function findById(pool: Pool, id: string): Promise<OrderRecord | null> {
+  const result = await pool.query<OrderRow>("SELECT * FROM orders WHERE id = $1", [id]);
+  const row = result.rows[0];
+  if (!row) return null;
+  const [order] = await attachItems(pool, [row]);
+  return order;
+}
+
+/** Every filter is optional - `$n::text IS NULL OR ...` lets one
+ * parameterized query cover every combination without building SQL
+ * strings by hand. */
+async function listAll(
+  pool: Pool,
+  filters: { deliveryDate?: string; status?: OrderStatus; search?: string } = {},
+): Promise<OrderRecord[]> {
+  const search = filters.search?.trim() || null;
+  const ordersResult = await pool.query<OrderRow>(
+    `SELECT * FROM orders
+     WHERE ($1::text IS NULL OR delivery_date = $1)
+       AND ($2::text IS NULL OR status = $2)
+       AND ($3::text IS NULL OR customer_name ILIKE '%' || $3 || '%' OR customer_phone ILIKE '%' || $3 || '%')
+     ORDER BY created_at DESC`,
+    [filters.deliveryDate ?? null, filters.status ?? null, search],
+  );
+  return attachItems(pool, ordersResult.rows);
+}
+
+async function applyDiscount(
+  pool: Pool,
+  orderId: string,
+  discount: { discountCents: number; discountReason: string | null },
+): Promise<void> {
+  await pool.query(
+    `UPDATE orders
+     SET discount_cents = $1, discount_reason = $2, discounted_at = now(), updated_at = now()
+     WHERE id = $3`,
+    [discount.discountCents, discount.discountReason, orderId],
+  );
+}
+
+async function updateStatus(pool: Pool, orderId: string, status: OrderStatus): Promise<void> {
+  await pool.query("UPDATE orders SET status = $1, updated_at = now() WHERE id = $2", [
+    status,
+    orderId,
+  ]);
+}
+
 /** Creates the real, Postgres-backed OrdersRepository. The only place in the
  * app that imports `pg` types directly for orders - everywhere else depends
  * on the OrdersRepository interface above. */
@@ -192,5 +271,9 @@ export function createPostgresOrdersRepository(pool: Pool): OrdersRepository {
         .then(() => undefined),
     listOrdersForDeliveryDate: (deliveryDate) => listOrdersForDeliveryDate(pool, deliveryDate),
     listOrdersFromDate: (fromDate) => listOrdersFromDate(pool, fromDate),
+    findById: (id) => findById(pool, id),
+    listAll: (filters) => listAll(pool, filters),
+    applyDiscount: (orderId, discount) => applyDiscount(pool, orderId, discount),
+    updateStatus: (orderId, status) => updateStatus(pool, orderId, status),
   };
 }

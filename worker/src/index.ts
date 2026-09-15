@@ -19,19 +19,31 @@ import {
   OTP_MAX_SENDS_PER_PHONE_PER_DAY,
   OTP_MAX_SENDS_PER_IP_PER_HOUR,
   SESSION_TTL_DAYS,
+  ADMIN_SESSION_TTL_DAYS,
   PASSWORD_RESET_TTL_MINUTES,
   LOGIN_MAX_FAILED_ATTEMPTS,
   LOGIN_LOCKOUT_MINUTES,
 } from "./lib/auth";
 import { requireAuth, type AuthVariables } from "./lib/authMiddleware";
+import { requireAdminAuth, type AdminAuthVariables } from "./lib/adminAuthMiddleware";
+import { createPostgresAdminUsersRepository } from "./lib/adminUsersRepository";
+import { createPostgresAdminSessionsRepository } from "./lib/adminSessionsRepository";
 import { sendOtpSms } from "./lib/berlinSms";
-import { toPublicCustomer, type CustomerRecord } from "./lib/customers";
+import { toPublicCustomer, type AddressFields, type CustomerRecord } from "./lib/customers";
 import { createPostgresCustomersRepository } from "./lib/customersRepository";
-import { getAvailableDeliveryDates, isDeliveryDateStillOrderable } from "./lib/dates";
+import {
+  getAvailableDeliveryDates,
+  isDeliveryDateStillOrderable,
+  isValidSaturday,
+} from "./lib/dates";
 import { checkPostalCode, quoteDeliveryForAddress } from "./lib/delivery";
-import { registerEmailNotifications, sendPasswordResetEmail } from "./lib/email";
+import {
+  registerEmailNotifications,
+  sendDiscountAppliedEmail,
+  sendPasswordResetEmail,
+} from "./lib/email";
 import { emitOrderCreated } from "./lib/orderEvents";
-import { OrderValidationError, priceOrder, type OrderRecord } from "./lib/orders";
+import { OrderValidationError, priceOrder, totalCents, type OrderRecord } from "./lib/orders";
 import { createPostgresOrdersRepository } from "./lib/ordersRepository";
 import { createPostgresOtpRepository } from "./lib/otpRepository";
 import { createPostgresPasswordResetTokensRepository } from "./lib/passwordResetTokensRepository";
@@ -39,9 +51,21 @@ import { createPostgresSessionsRepository } from "./lib/sessionsRepository";
 import {
   handleTelegramWebhookBody,
   registerTelegramNotifications,
+  sendDiscountAppliedTelegramMessage,
   secureCompare,
 } from "./lib/telegram";
 import {
+  AdminAuthResultSchema,
+  AdminCustomerSearchQuerySchema,
+  AdminCustomerSearchResultSchema,
+  AdminDiscountInputSchema,
+  AdminLoginInputSchema,
+  AdminMeResultSchema,
+  AdminOrderInputSchema,
+  AdminOrderListQuerySchema,
+  AdminOrderListResponseSchema,
+  AdminOrderResultSchema,
+  AdminStatusInputSchema,
   AuthResultSchema,
   DeliveryAddressSchema,
   DeliveryQuoteResponseSchema,
@@ -70,6 +94,8 @@ const customersRepository = createPostgresCustomersRepository(pool);
 const otpRepository = createPostgresOtpRepository(pool);
 const sessionsRepository = createPostgresSessionsRepository(pool);
 const passwordResetTokensRepository = createPostgresPasswordResetTokensRepository(pool);
+const adminUsersRepository = createPostgresAdminUsersRepository(pool);
+const adminSessionsRepository = createPostgresAdminSessionsRepository(pool);
 registerEmailNotifications(ordersRepository);
 registerTelegramNotifications(ordersRepository);
 
@@ -89,7 +115,11 @@ app.use(
   cors({
     origin: (origin) =>
       origin && config.allowedOrigins.includes(origin) ? origin : config.allowedOrigins[0],
-    allowMethods: ["GET", "POST", "OPTIONS"],
+    // PATCH added for the admin panel's discount/status-update endpoints -
+    // without it here, the CORS preflight succeeds but the browser then
+    // silently refuses to send the actual PATCH request at all
+    // (net::ERR_FAILED, no server-side log, since it never arrives).
+    allowMethods: ["GET", "POST", "PATCH", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization"],
   }),
 );
@@ -101,7 +131,10 @@ app.use(
 app.onError((err, c) => {
   Sentry.captureException(err);
   console.error("Unhandled error:", err);
-  return c.json({ error: "internal_error", message: "Something went wrong. Please try again." }, 500);
+  return c.json(
+    { error: "internal_error", message: "Something went wrong. Please try again." },
+    500,
+  );
 });
 
 // Health check stays unversioned and outside /v1 - it's for infra probes
@@ -805,6 +838,11 @@ v1.openapi(ordersRoute, async (c) => {
     notes: notes?.trim() || null,
     subtotalCents: pricedItems.reduce((sum, i) => sum + i.unitPriceCents * i.quantity, 0),
     items: pricedItems,
+    status: "received",
+    discountCents: 0,
+    discountReason: null,
+    discountedAt: null,
+    createdBy: "customer",
   };
 
   await ordersRepository.insertOrder(order);
@@ -828,14 +866,542 @@ v1.openapi(ordersRoute, async (c) => {
       distanceKm: order.distanceKm,
       subtotalCents: order.subtotalCents,
       deliveryFeeCents: order.deliveryFeeCents,
-      totalCents: order.subtotalCents + order.deliveryFeeCents,
+      totalCents: totalCents(order),
       paymentMethod: "cash_on_delivery" as const,
     },
     201,
   );
 });
 
+// --- Admin panel ---------------------------------------------------------
+// A completely separate OpenAPIHono instance (its own Variables shape,
+// AdminAuthVariables, and its own "adminBearerAuth" security scheme) - an
+// admin token and a customer token are never interchangeable, and this
+// keeps that true structurally, not just by convention. See
+// adminAuthMiddleware.ts / adminUsersRepository.ts / adminSessionsRepository.ts,
+// and migrations-manual/0001_admin_and_order_extensions.sql for how
+// admin_users/admin_sessions actually reach the live database (never via
+// `npm run db:migrate` - see that file's own comment).
+
+const v1Admin = new OpenAPIHono<{ Variables: AdminAuthVariables }>();
+
+v1Admin.use("/orders", requireAdminAuth(adminSessionsRepository));
+v1Admin.use("/orders/*", requireAdminAuth(adminSessionsRepository));
+v1Admin.use("/customers/*", requireAdminAuth(adminSessionsRepository));
+v1Admin.use("/me", requireAdminAuth(adminSessionsRepository));
+v1Admin.use("/logout", requireAdminAuth(adminSessionsRepository));
+
+v1Admin.openAPIRegistry.registerComponent("securitySchemes", "adminBearerAuth", {
+  type: "http",
+  scheme: "bearer",
+});
+
+async function issueAdminSession(adminUserId: string): Promise<string> {
+  const now = new Date();
+  const token = generateSessionToken();
+  await adminSessionsRepository.createSession({
+    id: newId("asess"),
+    createdAt: now.toISOString(),
+    expiresAt: new Date(now.getTime() + ADMIN_SESSION_TTL_DAYS * 24 * 60 * 60_000),
+    adminUserId,
+    tokenHash: hashToken(token),
+  });
+  return token;
+}
+
+/** The one place an OrderRecord becomes the shape the admin API hands
+ * back - always includes totalCents() rather than making every caller
+ * recompute subtotal + delivery - discount by hand. */
+function toAdminOrder(order: OrderRecord) {
+  return {
+    id: order.id,
+    createdAt: order.createdAt,
+    deliveryDate: order.deliveryDate,
+    fulfillmentType: order.fulfillmentType,
+    address: order.address,
+    distanceKm: order.distanceKm,
+    deliveryFeeCents: order.deliveryFeeCents,
+    customerId: order.customerId,
+    customerName: order.customerName,
+    customerEmail: order.customerEmail,
+    customerPhone: order.customerPhone,
+    notes: order.notes,
+    subtotalCents: order.subtotalCents,
+    discountCents: order.discountCents,
+    discountReason: order.discountReason,
+    totalCents: totalCents(order),
+    status: order.status,
+    createdBy: order.createdBy,
+    items: order.items,
+  };
+}
+
+const adminLoginRoute = createRoute({
+  method: "post",
+  path: "/login",
+  operationId: "adminLogin",
+  summary: "Admin login",
+  security: [], // deliberately public - this is how an admin session begins
+  request: {
+    body: { content: { "application/json": { schema: AdminLoginInputSchema } }, required: true },
+  },
+  responses: {
+    200: {
+      content: { "application/json": { schema: AdminAuthResultSchema } },
+      description: "Logged in.",
+    },
+    401: {
+      content: { "application/json": { schema: ErrorResponseSchema } },
+      description: "Incorrect credentials.",
+    },
+  },
+});
+v1Admin.openapi(adminLoginRoute, async (c) => {
+  const { email, password } = c.req.valid("json");
+  const invalidCredentials = () =>
+    c.json({ error: "invalid_credentials", message: "Incorrect email or password." }, 401 as const);
+
+  const adminUser = await adminUsersRepository.findByEmail(email.trim().toLowerCase());
+  if (!adminUser) return invalidCredentials();
+  if (!(await verifyPassword(password, adminUser.passwordHash))) return invalidCredentials();
+
+  const token = await issueAdminSession(adminUser.id);
+  return c.json(
+    { token, adminUser: { id: adminUser.id, email: adminUser.email, name: adminUser.name } },
+    200,
+  );
+});
+
+const adminLogoutRoute = createRoute({
+  method: "post",
+  path: "/logout",
+  operationId: "adminLogout",
+  summary: "Log out (invalidates the current admin session)",
+  security: [{ adminBearerAuth: [] }],
+  responses: {
+    204: { description: "Logged out." },
+    401: {
+      content: { "application/json": { schema: ErrorResponseSchema } },
+      description: "Not signed in.",
+    },
+  },
+});
+v1Admin.openapi(adminLogoutRoute, async (c) => {
+  const token = c.req.header("Authorization")!.slice(7);
+  await adminSessionsRepository.deleteByTokenHash(hashToken(token));
+  return c.body(null, 204);
+});
+
+const adminMeRoute = createRoute({
+  method: "get",
+  path: "/me",
+  operationId: "adminMe",
+  summary: "Get the currently logged-in admin user",
+  security: [{ adminBearerAuth: [] }],
+  responses: {
+    200: {
+      content: { "application/json": { schema: AdminMeResultSchema } },
+      description: "The logged-in admin.",
+    },
+    401: {
+      content: { "application/json": { schema: ErrorResponseSchema } },
+      description: "Not signed in.",
+    },
+  },
+});
+v1Admin.openapi(adminMeRoute, async (c) => {
+  const adminUser = await adminUsersRepository.findById(c.get("adminUserId"));
+  if (!adminUser) {
+    return c.json({ error: "unauthorized", message: "Sign in required." }, 401);
+  }
+  return c.json(
+    { adminUser: { id: adminUser.id, email: adminUser.email, name: adminUser.name } },
+    200,
+  );
+});
+
+const adminListOrdersRoute = createRoute({
+  method: "get",
+  path: "/orders",
+  operationId: "adminListOrders",
+  summary: "List/search orders",
+  security: [{ adminBearerAuth: [] }],
+  request: { query: AdminOrderListQuerySchema },
+  responses: {
+    200: {
+      content: { "application/json": { schema: AdminOrderListResponseSchema } },
+      description: "Matching orders, most recent first.",
+    },
+    401: {
+      content: { "application/json": { schema: ErrorResponseSchema } },
+      description: "Not signed in.",
+    },
+  },
+});
+v1Admin.openapi(adminListOrdersRoute, async (c) => {
+  const { deliveryDate, status, search } = c.req.valid("query");
+  const orders = await ordersRepository.listAll({ deliveryDate, status, search });
+  return c.json({ orders: orders.map(toAdminOrder) }, 200);
+});
+
+const adminGetOrderRoute = createRoute({
+  method: "get",
+  path: "/orders/{id}",
+  operationId: "adminGetOrder",
+  summary: "Get one order",
+  security: [{ adminBearerAuth: [] }],
+  request: { params: z.object({ id: z.string() }) },
+  responses: {
+    200: {
+      content: { "application/json": { schema: AdminOrderResultSchema } },
+      description: "The order.",
+    },
+    404: {
+      content: { "application/json": { schema: ErrorResponseSchema } },
+      description: "No such order.",
+    },
+  },
+});
+v1Admin.openapi(adminGetOrderRoute, async (c) => {
+  const { id } = c.req.valid("param");
+  const order = await ordersRepository.findById(id);
+  if (!order) return c.json({ error: "not_found", message: "Order not found." }, 404);
+  return c.json({ order: toAdminOrder(order) }, 200);
+});
+
+const adminCustomerSearchRoute = createRoute({
+  method: "get",
+  path: "/customers/search",
+  operationId: "adminCustomerSearch",
+  summary: "Find an existing customer by exact phone or email",
+  security: [{ adminBearerAuth: [] }],
+  request: { query: AdminCustomerSearchQuerySchema },
+  responses: {
+    200: {
+      content: { "application/json": { schema: AdminCustomerSearchResultSchema } },
+      description: "The matching customer, or null if none.",
+    },
+  },
+});
+v1Admin.openapi(adminCustomerSearchRoute, async (c) => {
+  const { identifier } = c.req.valid("query");
+  const found = await customersRepository.findByPhoneOrEmail(identifier.trim().toLowerCase());
+  return c.json({ customer: found ? toPublicCustomer(found) : null }, 200);
+});
+
+// Staff order entry: a phone/WhatsApp customer may not have an email or
+// date of birth on hand. `customers` requires both NOT NULL (email is also
+// UNIQUE) - a deterministic, per-phone placeholder keeps that index happy
+// without colliding across different phone-only customers; ".internal" is
+// reserved by RFC 8375 specifically so nothing ever tries to route real
+// mail there. sendConfirmationEmail already no-ops safely on any SMTP
+// failure, so a placeholder just means no confirmation email goes out for
+// that order, never a crash.
+function staffPlaceholderEmail(phone: string): string {
+  return `${phone.replace(/[^0-9]/g, "")}@staff.dhakakacchi.internal`;
+}
+const STAFF_PLACEHOLDER_DOB = "1970-01-01";
+const STAFF_PLACEHOLDER_ADDRESS: AddressFields = {
+  street: "N/A",
+  houseNumber: "N/A",
+  postalCode: "00000",
+  city: "N/A",
+};
+
+const adminCreateOrderRoute = createRoute({
+  method: "post",
+  path: "/orders",
+  operationId: "adminCreateOrder",
+  summary: "Manually record an order placed by phone/WhatsApp",
+  security: [{ adminBearerAuth: [] }],
+  request: {
+    body: { content: { "application/json": { schema: AdminOrderInputSchema } }, required: true },
+  },
+  responses: {
+    201: {
+      content: { "application/json": { schema: AdminOrderResultSchema } },
+      description: "The order was created.",
+    },
+    400: {
+      content: { "application/json": { schema: ErrorResponseSchema } },
+      description: "Invalid input.",
+    },
+    409: {
+      content: { "application/json": { schema: ErrorResponseSchema } },
+      description: "A customer with this phone or email already exists.",
+    },
+  },
+});
+v1Admin.openapi(adminCreateOrderRoute, async (c) => {
+  const body = c.req.valid("json");
+  const {
+    items,
+    deliveryDate,
+    fulfillmentType,
+    address,
+    customerName,
+    notes,
+    existingCustomerId,
+    newCustomer,
+  } = body;
+
+  if (!existingCustomerId && !newCustomer) {
+    return c.json(
+      { error: "customer_required", message: "Provide existingCustomerId or newCustomer." },
+      400,
+    );
+  }
+  if (existingCustomerId && newCustomer) {
+    return c.json(
+      { error: "invalid_input", message: "Provide only one of existingCustomerId or newCustomer." },
+      400,
+    );
+  }
+
+  // Deliberately isValidSaturday, not isDeliveryDateStillOrderable - staff
+  // recording a late phone order is exactly the point of this endpoint, so
+  // the Friday-18:00 cutoff is skipped, but the date must still be a real
+  // Saturday.
+  if (!isValidSaturday(deliveryDate)) {
+    return c.json(
+      { error: "invalid_delivery_date", message: "Delivery date must be a Saturday (YYYY-MM-DD)." },
+      400,
+    );
+  }
+
+  let customer: CustomerRecord;
+  if (existingCustomerId) {
+    const found = await customersRepository.findById(existingCustomerId);
+    if (!found) {
+      return c.json({ error: "customer_not_found", message: "No customer with that id." }, 400);
+    }
+    customer = found;
+  } else {
+    const input = newCustomer!;
+    const phone = input.phone.trim();
+    const newRecord: CustomerRecord = {
+      id: newId("cust"),
+      createdAt: new Date().toISOString(),
+      phone,
+      email: input.email?.trim().toLowerCase() || staffPlaceholderEmail(phone),
+      name: input.name.trim(),
+      dateOfBirth: input.dateOfBirth ?? STAFF_PLACEHOLDER_DOB,
+      address: input.address ?? STAFF_PLACEHOLDER_ADDRESS,
+      // A cryptographically random, never-communicated password - not a
+      // "readable password" generator, same primitive a session token
+      // uses. The customer can use "forgot password" later if they ever
+      // want online login and have provided a real email.
+      passwordHash: await hashPassword(generateSessionToken()),
+    };
+    try {
+      await customersRepository.insertCustomer(newRecord);
+    } catch (err) {
+      if (isUniqueViolation(err)) {
+        return c.json(
+          {
+            error: "already_registered",
+            message: "A customer with this phone or email already exists — search instead.",
+          },
+          409,
+        );
+      }
+      throw err;
+    }
+    customer = newRecord;
+  }
+
+  // Same server-side re-derivation as the public POST /orders - never
+  // trust the client for price/fee, admin or not.
+  let addressFields: OrderRecord["address"] = null;
+  let addressLat: number | null = null;
+  let addressLng: number | null = null;
+  let distanceKm: number | null = null;
+  let deliveryFeeCents = 0;
+
+  if (fulfillmentType === "delivery") {
+    if (!address) {
+      return c.json({ error: "address_required", message: "A delivery address is required." }, 400);
+    }
+    const quote = quoteDeliveryForAddress(address);
+    if (!quote.ok) {
+      return c.json({ error: quote.reason, message: quote.message }, 400);
+    }
+    if (!quote.deliverable) {
+      const message =
+        quote.reason === "address_not_found"
+          ? "We couldn't find that address. Please check it and try again."
+          : quote.reason === "outside_berlin"
+            ? "That address is outside Berlin — delivery isn't available there."
+            : "That address is too far for delivery.";
+      return c.json({ error: quote.reason, message }, 400);
+    }
+    addressFields = address;
+    addressLat = quote.lat;
+    addressLng = quote.lng;
+    distanceKm = quote.distanceKm;
+    deliveryFeeCents = quote.feeCents;
+  }
+
+  let pricedItems: OrderRecord["items"];
+  try {
+    pricedItems = priceOrder(items);
+  } catch (err) {
+    if (err instanceof OrderValidationError) {
+      return c.json({ error: "invalid_items", message: err.message }, 400);
+    }
+    throw err;
+  }
+
+  const order: OrderRecord = {
+    id: newId("ord"),
+    createdAt: new Date().toISOString(),
+    deliveryDate,
+    fulfillmentType,
+    address: addressFields,
+    addressLat,
+    addressLng,
+    distanceKm,
+    deliveryFeeCents,
+    customerId: customer.id,
+    customerName: customerName.trim(),
+    customerEmail: customer.email,
+    customerPhone: customer.phone,
+    notes: notes?.trim() || null,
+    subtotalCents: pricedItems.reduce((sum, i) => sum + i.unitPriceCents * i.quantity, 0),
+    items: pricedItems,
+    status: "received",
+    discountCents: 0,
+    discountReason: null,
+    discountedAt: null,
+    createdBy: "staff",
+  };
+
+  await ordersRepository.insertOrder(order);
+  await customersRepository.updateProfile(customer.id, {
+    name: order.customerName,
+    address: addressFields ?? undefined,
+  });
+  // Same event as the public flow - Telegram + email fire identically for
+  // a staff-entered order, with zero new notification code needed here.
+  await emitOrderCreated(order);
+
+  return c.json({ order: toAdminOrder(order) }, 201);
+});
+
+const adminApplyDiscountRoute = createRoute({
+  method: "patch",
+  path: "/orders/{id}/discount",
+  operationId: "adminApplyDiscount",
+  summary: "Set (or clear) an order's discount",
+  security: [{ adminBearerAuth: [] }],
+  request: {
+    params: z.object({ id: z.string() }),
+    body: { content: { "application/json": { schema: AdminDiscountInputSchema } }, required: true },
+  },
+  responses: {
+    200: {
+      content: { "application/json": { schema: AdminOrderResultSchema } },
+      description: "Discount applied.",
+    },
+    400: {
+      content: { "application/json": { schema: ErrorResponseSchema } },
+      description: "Invalid discount.",
+    },
+    404: {
+      content: { "application/json": { schema: ErrorResponseSchema } },
+      description: "No such order.",
+    },
+  },
+});
+// Replaces (never accumulates) the order's current discount - calling this
+// twice sets the discount to whatever the second call says, it doesn't
+// stack. Re-fires the discount-applied notifications every successful
+// call, by design (see email.ts/telegram.ts) - the admin UI must confirm
+// before submitting, since a fumbled double-submit here double-notifies
+// the customer/owner.
+v1Admin.openapi(adminApplyDiscountRoute, async (c) => {
+  const { id } = c.req.valid("param");
+  const { discountCents, discountReason } = c.req.valid("json");
+
+  const order = await ordersRepository.findById(id);
+  if (!order) return c.json({ error: "not_found", message: "Order not found." }, 404);
+  if (order.status === "cancelled") {
+    return c.json({ error: "order_cancelled", message: "Can't discount a cancelled order." }, 400);
+  }
+
+  const maxDiscount = order.subtotalCents + order.deliveryFeeCents;
+  if (discountCents > maxDiscount) {
+    return c.json(
+      {
+        error: "discount_too_large",
+        message: `Discount can't exceed the order total (€${(maxDiscount / 100).toFixed(2)}).`,
+      },
+      400,
+    );
+  }
+
+  await ordersRepository.applyDiscount(id, {
+    discountCents,
+    discountReason: discountReason?.trim() || null,
+  });
+  const updated = (await ordersRepository.findById(id))!;
+
+  await Promise.allSettled([
+    sendDiscountAppliedEmail(updated).catch((err) => {
+      Sentry.captureException(err);
+      console.error("sendDiscountAppliedEmail failed:", err);
+    }),
+    sendDiscountAppliedTelegramMessage(updated).catch((err) => {
+      Sentry.captureException(err);
+      console.error("sendDiscountAppliedTelegramMessage failed:", err);
+    }),
+  ]);
+
+  return c.json({ order: toAdminOrder(updated) }, 200);
+});
+
+const adminUpdateStatusRoute = createRoute({
+  method: "patch",
+  path: "/orders/{id}/status",
+  operationId: "adminUpdateStatus",
+  summary: "Update an order's status",
+  security: [{ adminBearerAuth: [] }],
+  request: {
+    params: z.object({ id: z.string() }),
+    body: { content: { "application/json": { schema: AdminStatusInputSchema } }, required: true },
+  },
+  responses: {
+    200: {
+      content: { "application/json": { schema: AdminOrderResultSchema } },
+      description: "Status updated.",
+    },
+    400: {
+      content: { "application/json": { schema: ErrorResponseSchema } },
+      description: "Order already cancelled.",
+    },
+    404: {
+      content: { "application/json": { schema: ErrorResponseSchema } },
+      description: "No such order.",
+    },
+  },
+});
+v1Admin.openapi(adminUpdateStatusRoute, async (c) => {
+  const { id } = c.req.valid("param");
+  const { status } = c.req.valid("json");
+
+  const order = await ordersRepository.findById(id);
+  if (!order) return c.json({ error: "not_found", message: "Order not found." }, 404);
+  if (order.status === "cancelled") {
+    return c.json({ error: "order_cancelled", message: "This order is already cancelled." }, 400);
+  }
+
+  await ordersRepository.updateStatus(id, status);
+  const updated = (await ordersRepository.findById(id))!;
+  return c.json({ order: toAdminOrder(updated) }, 200);
+});
+
 app.route("/v1", v1);
+app.route("/v1/admin", v1Admin);
 
 // The OpenAPI document a future app (or an AI coding agent building one)
 // imports to generate a typed client - this IS the API reference; there is

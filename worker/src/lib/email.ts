@@ -3,7 +3,7 @@ import nodemailer, { type Transporter } from "nodemailer";
 import { config } from "../config";
 import { KITCHEN_LOCATION } from "../data";
 import { onOrderCreated } from "./orderEvents";
-import type { OrderRecord } from "./orders";
+import { totalCents, type OrderRecord } from "./orders";
 import type { OrdersRepository } from "./ordersRepository";
 
 function fulfillmentLine(order: OrderRecord): string {
@@ -58,7 +58,7 @@ export async function sendConfirmationEmail(order: OrderRecord): Promise<boolean
       "Your order is confirmed:",
       itemLines,
       "",
-      `Total: €${((order.subtotalCents + order.deliveryFeeCents) / 100).toFixed(2)} (cash on delivery)`,
+      `Total: €${(totalCents(order) / 100).toFixed(2)} (cash on delivery)`,
       fulfillmentLine(order),
       "",
       "See you then!",
@@ -99,6 +99,44 @@ export async function sendPasswordResetEmail(
       resetUrl,
       "",
       "This link expires in 60 minutes. If you didn't request this, you can ignore this email.",
+      "",
+      "Dhaka Kacchi Berlin",
+    ].join("\n"),
+  });
+
+  return true;
+}
+
+/**
+ * Sent when staff apply a discount via the admin panel - sendConfirmationEmail
+ * already went out once, synchronously, at order creation, with no re-notify
+ * mechanism, so a discount applied afterwards (the whole point of that admin
+ * feature) would otherwise leave the customer holding a confirmation email
+ * with a stale, pre-discount total forever. Best-effort like
+ * sendConfirmationEmail, not sendPasswordResetEmail - a customer not
+ * learning about a discount is a missed nicety, not something they're
+ * blocked on. Called directly from the admin discount-update handler, not
+ * routed through orderEvents.ts (only one caller will ever trigger this).
+ */
+export async function sendDiscountAppliedEmail(order: OrderRecord): Promise<boolean> {
+  if (!config.hostingerSmtpHost || !config.hostingerSmtpUser || !config.hostingerSmtpPass) {
+    console.warn("Discount email not sent: HOSTINGER_SMTP_* is not configured.");
+    return false;
+  }
+
+  await getTransporter().sendMail({
+    from: `"Dhaka Kacchi Berlin" <${config.orderFromEmail}>`,
+    to: `"${order.customerName}" <${order.customerEmail}>`,
+    subject: `Your order total was updated — Dhaka Kacchi Berlin`,
+    text: [
+      `Hi ${order.customerName},`,
+      "",
+      `We've applied a discount of €${(order.discountCents / 100).toFixed(2)} to your order` +
+        (order.discountReason ? ` (${order.discountReason})` : "") +
+        ".",
+      "",
+      `New total: €${(totalCents(order) / 100).toFixed(2)} (cash on delivery)`,
+      fulfillmentLine(order),
       "",
       "Dhaka Kacchi Berlin",
     ].join("\n"),

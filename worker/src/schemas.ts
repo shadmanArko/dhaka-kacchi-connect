@@ -134,7 +134,7 @@ export const ErrorResponseSchema = z
 // ever used as a Twilio `To` value or a rate-limit/uniqueness key, so
 // differently-formatted input for the same real number is never silently
 // treated as two different identifiers (see auth.ts's isE164).
-const PhoneSchema = z
+export const PhoneSchema = z
   .string()
   .refine(isE164, "Phone number must be in international format, e.g. +491701234567.")
   .openapi({ example: "+491701234567" });
@@ -219,3 +219,157 @@ export const MessageResultSchema = z
     message: z.string(),
   })
   .openapi("MessageResult");
+
+// --- Admin panel ----------------------------------------------------------
+// A completely separate identity/schema space from the customer schemas
+// above - never shares a type with PublicCustomer/AuthResult/etc., so an
+// admin and a customer token/record can never be confused for one another.
+
+const OrderStatusSchema = z.enum(["received", "confirmed", "delivered", "cancelled"]);
+
+export const AdminLoginInputSchema = z
+  .object({
+    email: z.string().email(),
+    password: z.string().min(1),
+  })
+  .openapi("AdminLoginInput");
+
+export const AdminUserSchema = z
+  .object({
+    id: z.string().openapi({ example: "adm_2f2db69b-a757-4f0d-9ff8-33eee670647f" }),
+    email: z.string().email(),
+    name: z.string(),
+  })
+  .openapi("AdminUser");
+
+export const AdminAuthResultSchema = z
+  .object({
+    token: z.string(),
+    adminUser: AdminUserSchema,
+  })
+  .openapi("AdminAuthResult");
+
+export const AdminMeResultSchema = z
+  .object({
+    adminUser: AdminUserSchema,
+  })
+  .openapi("AdminMeResult");
+
+export const AdminOrderItemSchema = z
+  .object({
+    sku: z.string(),
+    name: z.string(),
+    unitPriceCents: z.number().int(),
+    quantity: z.number().int(),
+  })
+  .openapi("AdminOrderItem");
+
+// The admin-facing order shape - a superset of the public OrderResultSchema
+// (also exposes status/discount/createdBy/full item list/customer contact
+// info, none of which the public API needs to hand back to the customer
+// who already knows their own details).
+export const AdminOrderSchema = z
+  .object({
+    id: z.string(),
+    createdAt: z.string(),
+    deliveryDate: z.string(),
+    fulfillmentType: z.enum(["pickup", "delivery"]),
+    address: DeliveryAddressSchema.nullable(),
+    distanceKm: z.number().nullable(),
+    deliveryFeeCents: z.number().int(),
+    customerId: z.string(),
+    customerName: z.string(),
+    customerEmail: z.string(),
+    customerPhone: z.string(),
+    notes: z.string().nullable(),
+    subtotalCents: z.number().int(),
+    discountCents: z.number().int(),
+    discountReason: z.string().nullable(),
+    totalCents: z.number().int(),
+    status: OrderStatusSchema,
+    createdBy: z.enum(["customer", "staff"]),
+    items: z.array(AdminOrderItemSchema),
+  })
+  .openapi("AdminOrder");
+
+export const AdminOrderListQuerySchema = z
+  .object({
+    deliveryDate: z.string().optional().openapi({ description: "YYYY-MM-DD, exact match" }),
+    status: OrderStatusSchema.optional(),
+    search: z.string().optional().openapi({ description: "Matches customer name or phone" }),
+  })
+  .openapi("AdminOrderListQuery");
+
+export const AdminOrderListResponseSchema = z
+  .object({
+    orders: z.array(AdminOrderSchema),
+  })
+  .openapi("AdminOrderListResponse");
+
+export const AdminOrderResultSchema = z
+  .object({
+    order: AdminOrderSchema,
+  })
+  .openapi("AdminOrderResult");
+
+export const AdminCustomerSearchQuerySchema = z
+  .object({
+    identifier: z.string().min(1).openapi({ description: "Phone (E.164) or email, exact match" }),
+  })
+  .openapi("AdminCustomerSearchQuery");
+
+export const AdminCustomerSearchResultSchema = z
+  .object({
+    customer: PublicCustomerSchema.nullable(),
+  })
+  .openapi("AdminCustomerSearchResult");
+
+// Only required when the order isn't for an existing customer - staff
+// realistically may not have a phone-order customer's email/DOB on hand,
+// so both are optional here (a placeholder value fills the gap server-side
+// - see customersRepository usage in index.ts).
+export const AdminNewCustomerInputSchema = z
+  .object({
+    phone: PhoneSchema,
+    name: z.string().min(1),
+    email: z.string().email().optional(),
+    dateOfBirth: z
+      .string()
+      .optional()
+      .openapi({ example: "1990-05-14", description: "YYYY-MM-DD" }),
+    address: DeliveryAddressSchema.optional(),
+  })
+  .openapi("AdminNewCustomerInput");
+
+export const AdminOrderInputSchema = z
+  .object({
+    items: z.array(OrderItemInputSchema).min(1),
+    deliveryDate: z
+      .string()
+      .openapi({ example: "2026-09-12", description: "YYYY-MM-DD, must be a valid Saturday" }),
+    fulfillmentType: z.enum(["pickup", "delivery"]),
+    address: DeliveryAddressSchema.optional().openapi({
+      description: "Required when fulfillmentType is 'delivery'",
+    }),
+    customerName: z.string().min(1),
+    notes: z.string().optional(),
+    // Exactly one of these two must be provided - validated in the route
+    // handler, not here, since a cross-field "exactly one of" rule reads
+    // more clearly as an explicit check than a zod .refine on a large object.
+    existingCustomerId: z.string().optional(),
+    newCustomer: AdminNewCustomerInputSchema.optional(),
+  })
+  .openapi("AdminOrderInput");
+
+export const AdminDiscountInputSchema = z
+  .object({
+    discountCents: z.number().int().min(0),
+    discountReason: z.string().optional(),
+  })
+  .openapi("AdminDiscountInput");
+
+export const AdminStatusInputSchema = z
+  .object({
+    status: OrderStatusSchema,
+  })
+  .openapi("AdminStatusInput");

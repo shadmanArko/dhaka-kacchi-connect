@@ -28,9 +28,11 @@ is printed to the console instead of actually sent, so registration and
 credentials — look for a `[dev] ...` line in the server's output.
 
 **`npm run db:migrate` runs `DROP TABLE IF EXISTS` before every
-`CREATE TABLE`.** Fine against an empty or throwaway database. Never run it
-against a database with real orders in it without a backup first — there is
-no real migration chain yet (see `schema.sql`'s own comment).
+`CREATE TABLE`.** Fine against an empty or throwaway database — it now
+refuses to run at all against one with real orders in it, unless you pass
+`ALLOW_DESTRUCTIVE_MIGRATE=1` (see `scripts/migrate.ts`). A schema change
+against production goes through `migrations-manual/` instead — see that
+directory's own README and `schema.sql`'s comment.
 
 ## The 5 most common changes
 
@@ -176,6 +178,56 @@ scoped to error tracking, not full APM/tracing.
 | `src/server.ts` | Process entrypoint (starts the HTTP server, handles shutdown) |
 | `src/instrument.ts` | Sentry.init() — must stay the first import in `src/server.ts` |
 | `scripts/weeklyDigest.ts` | Friday-evening Telegram summary of the week's orders (cron-triggered, see below) |
+| `src/lib/adminUsersRepository.ts` / `adminSessionsRepository.ts` / `adminAuthMiddleware.ts` | Admin panel auth — see below |
+| `scripts/createAdminUser.ts` | One-time (re-runnable) admin account creation/password reset |
+| `migrations-manual/` | Additive, hand-run schema changes for a production database that already has real orders — see that directory's README |
+
+## Admin panel
+
+Staff-only (`/v1/admin/*`, gated by `requireAdminAuth`/`admin_sessions` — a
+completely separate login/token from customer accounts) endpoints for two
+things the self-serve site can't do: recording an order a customer placed
+by phone/WhatsApp (`POST /v1/admin/orders`, reusing the exact same
+`priceOrder`/`quoteDeliveryForAddress` logic as the public endpoint, but
+skipping the Friday-18:00 cutoff via `isValidSaturday` instead of
+`isDeliveryDateStillOrderable`), and applying a discount or status change
+to an already-placed order (`PATCH /v1/admin/orders/{id}/discount` /
+`.../status`).
+
+**Bootstrap the first admin account** (also how you reset a forgotten
+password):
+```bash
+ADMIN_EMAIL=you@example.com ADMIN_NAME="Your Name" ADMIN_PASSWORD=... npm run admin:create-user
+```
+
+A discount is *current state on the order*, not a log — `applyDiscount`
+always replaces `discount_cents`/`discount_reason`, never accumulates.
+`orders.ts`'s `totalCents(order)` (`subtotal + deliveryFee - discount`) is
+the one place a total is computed — every caller (the public API response,
+the Telegram alert, the confirmation email, the admin API/UI) goes through
+it, so the formula can't drift now that a discount exists. Applying a
+discount or changing status fires a new, dedicated notification
+(`sendDiscountAppliedEmail`/`sendDiscountAppliedTelegramMessage`) — the
+original order-creation email/Telegram alert already went out once and
+can't be un-sent, so this is how the customer/owner learn about a change
+made afterward.
+
+`orders.status` (`received | confirmed | delivered | cancelled`) was
+already a column but nothing ever wrote to it before this — the admin
+panel is what makes it real. Once staff mark orders `delivered`, the
+warehouse's `make gate` monthly margin report (in the sibling
+`dhaka_kacchi_ai_harness` repo) starts actually finding rows instead of
+reporting "no delivered orders" every month.
+
+**Frontend**: `src/routes/admin/_layout.tsx` plus its children -
+`_layout.index.tsx` (`/admin`), `_layout.login.tsx` (`/admin/login`),
+`_layout.orders.new.tsx` (`/admin/orders/new`) - live in the sibling
+`dhaka-kacchi-connect` root, not here. Order detail/discount/status
+editing is a panel driven by a `?order=` search param on `/admin`, not its
+own route - the site ships as a static export with no SPA-fallback
+rewrite, so a dynamic route segment can't be reliably deep-linked. See
+that repo's own `CLAUDE.md`/`scripts/build-static.mjs` if you're touching
+the frontend side.
 
 ## Deploying
 

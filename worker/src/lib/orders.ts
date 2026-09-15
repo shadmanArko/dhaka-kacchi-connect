@@ -27,6 +27,8 @@ export type OrderInput = {
   notes?: string;
 };
 
+export type OrderStatus = "received" | "confirmed" | "delivered" | "cancelled";
+
 export type OrderRecord = {
   id: string;
   createdAt: string;
@@ -48,7 +50,28 @@ export type OrderRecord = {
   notes: string | null;
   subtotalCents: number;
   items: Array<{ sku: string; name: string; unitPriceCents: number; quantity: number }>;
+  status: OrderStatus;
+  // Staff-applied discount (admin panel only) - current state, not a log:
+  // applying a new discount replaces these three fields. subtotalCents
+  // above is never touched by a discount, so it stays a pure function of
+  // priceOrder()/menu prices - see totalCents() below for what the
+  // customer actually owes.
+  discountCents: number;
+  discountReason: string | null;
+  discountedAt: string | null;
+  // 'staff' for an order entered via the admin panel on a customer's
+  // behalf; 'customer' for the normal self-serve flow.
+  createdBy: "customer" | "staff";
 };
+
+/** The one place "what does the customer actually owe" is computed - every
+ * total shown anywhere (the order-confirmation email, the owner's Telegram
+ * alert, the admin dashboard, the public API response) must go through
+ * this, not repeat the arithmetic, so the formula can never drift once a
+ * discount exists. */
+export function totalCents(order: OrderRecord): number {
+  return order.subtotalCents + order.deliveryFeeCents - order.discountCents;
+}
 
 export class OrderValidationError extends Error {}
 

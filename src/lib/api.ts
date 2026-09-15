@@ -134,6 +134,89 @@ function authHeader(token: string): HeadersInit {
   return { Authorization: `Bearer ${token}` };
 }
 
+// --- Admin panel ---
+// A separate type/identity space from the customer types above - an admin
+// token and a customer token (and their user records) are never
+// interchangeable, mirroring the backend's own separate admin_users/
+// admin_sessions tables and adminBearerAuth security scheme.
+
+export type OrderStatus = "received" | "confirmed" | "delivered" | "cancelled";
+
+export type AdminUser = { id: string; email: string; name: string };
+export type AdminAuthResult = { token: string; adminUser: AdminUser };
+
+export type AdminOrderItem = {
+  sku: string;
+  name: string;
+  unitPriceCents: number;
+  quantity: number;
+};
+
+export type AdminOrder = {
+  id: string;
+  createdAt: string;
+  deliveryDate: string;
+  fulfillmentType: "pickup" | "delivery";
+  address: DeliveryAddressInput | null;
+  distanceKm: number | null;
+  deliveryFeeCents: number;
+  customerId: string;
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string;
+  notes: string | null;
+  subtotalCents: number;
+  discountCents: number;
+  discountReason: string | null;
+  totalCents: number;
+  status: OrderStatus;
+  createdBy: "customer" | "staff";
+  items: AdminOrderItem[];
+};
+
+export type AdminOrderListFilters = {
+  deliveryDate?: string;
+  status?: OrderStatus;
+  search?: string;
+};
+
+// Only required when the order isn't for an existing customer - a phone/
+// WhatsApp order realistically may not come with an email or DOB, so both
+// are optional here (the backend fills in a placeholder - see
+// worker/src/index.ts's adminCreateOrderRoute).
+export type AdminNewCustomerInput = {
+  phone: string;
+  name: string;
+  email?: string;
+  dateOfBirth?: string;
+  address?: DeliveryAddressInput;
+};
+
+export type AdminOrderInput = {
+  items: OrderItemInput[];
+  deliveryDate: string;
+  fulfillmentType: "pickup" | "delivery";
+  address?: DeliveryAddressInput;
+  customerName: string;
+  notes?: string;
+  // Exactly one of these two - the admin order-creation form enforces this
+  // in its own flow (search first, only show "create new" once a search
+  // comes up empty), same "exactly one of" contract as the backend route.
+  existingCustomerId?: string;
+  newCustomer?: AdminNewCustomerInput;
+};
+
+export type AdminDiscountInput = { discountCents: number; discountReason?: string };
+
+function buildQuery(params: Record<string, string | undefined>): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value) search.set(key, value);
+  }
+  const query = search.toString();
+  return query ? `?${query}` : "";
+}
+
 export const api = {
   subscribe: (email: string) =>
     apiFetch<{ ok: true }>("/subscribe", {
@@ -192,5 +275,48 @@ export const api = {
     apiFetch<{ message: string }>("/v1/auth/password-reset/confirm", {
       method: "POST",
       body: JSON.stringify({ token, newPassword }),
+    }),
+};
+
+export const adminApi = {
+  login: (input: { email: string; password: string }) =>
+    apiFetch<AdminAuthResult>("/v1/admin/login", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  logout: (token: string) =>
+    apiFetch<void>("/v1/admin/logout", { method: "POST", headers: authHeader(token) }),
+  getMe: (token: string) =>
+    apiFetch<{ adminUser: AdminUser }>("/v1/admin/me", { headers: authHeader(token) }),
+  listOrders: (token: string, filters: AdminOrderListFilters = {}) =>
+    apiFetch<{ orders: AdminOrder[] }>(`/v1/admin/orders${buildQuery(filters)}`, {
+      headers: authHeader(token),
+    }),
+  getOrder: (token: string, orderId: string) =>
+    apiFetch<{ order: AdminOrder }>(`/v1/admin/orders/${encodeURIComponent(orderId)}`, {
+      headers: authHeader(token),
+    }),
+  searchCustomer: (token: string, identifier: string) =>
+    apiFetch<{ customer: PublicCustomer | null }>(
+      `/v1/admin/customers/search${buildQuery({ identifier })}`,
+      { headers: authHeader(token) },
+    ),
+  createOrder: (token: string, input: AdminOrderInput) =>
+    apiFetch<{ order: AdminOrder }>("/v1/admin/orders", {
+      method: "POST",
+      headers: authHeader(token),
+      body: JSON.stringify(input),
+    }),
+  applyDiscount: (token: string, orderId: string, input: AdminDiscountInput) =>
+    apiFetch<{ order: AdminOrder }>(`/v1/admin/orders/${encodeURIComponent(orderId)}/discount`, {
+      method: "PATCH",
+      headers: authHeader(token),
+      body: JSON.stringify(input),
+    }),
+  updateStatus: (token: string, orderId: string, status: OrderStatus) =>
+    apiFetch<{ order: AdminOrder }>(`/v1/admin/orders/${encodeURIComponent(orderId)}/status`, {
+      method: "PATCH",
+      headers: authHeader(token),
+      body: JSON.stringify({ status }),
     }),
 };

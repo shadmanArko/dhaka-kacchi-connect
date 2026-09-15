@@ -5,7 +5,7 @@ import { config } from "../config";
 import { KITCHEN_LOCATION } from "../data";
 import { todayIsoDate } from "./dates";
 import { onOrderCreated } from "./orderEvents";
-import type { OrderRecord } from "./orders";
+import { totalCents, type OrderRecord } from "./orders";
 import type { OrdersRepository } from "./ordersRepository";
 
 function fulfillmentLine(order: OrderRecord): string {
@@ -61,8 +61,25 @@ export function sendTelegramOrderAlert(order: OrderRecord): Promise<boolean> {
   const text =
     `New order #${order.id}\n` +
     `${itemSummary}\n` +
-    `Total: €${((order.subtotalCents + order.deliveryFeeCents) / 100).toFixed(2)} (cash on delivery)\n` +
+    `Total: €${(totalCents(order) / 100).toFixed(2)} (cash on delivery)\n` +
     `${fulfillmentLine(order)}\n` +
+    `Customer: ${order.customerName}, ${order.customerPhone}`;
+  return sendTelegramMessage(text);
+}
+
+/**
+ * Sent to the owner when staff apply a discount via the admin panel -
+ * sendTelegramOrderAlert already fired once, synchronously, at order
+ * creation, so this closes the same "stale total" gap
+ * sendDiscountAppliedEmail closes for the customer side (see email.ts).
+ */
+export function sendDiscountAppliedTelegramMessage(order: OrderRecord): Promise<boolean> {
+  const text =
+    `Discount applied to order #${order.id}\n` +
+    `-€${(order.discountCents / 100).toFixed(2)}` +
+    (order.discountReason ? ` (${order.discountReason})` : "") +
+    "\n" +
+    `New total: €${(totalCents(order) / 100).toFixed(2)} (cash on delivery)\n` +
     `Customer: ${order.customerName}, ${order.customerPhone}`;
   return sendTelegramMessage(text);
 }

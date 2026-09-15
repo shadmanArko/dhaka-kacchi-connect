@@ -16,6 +16,10 @@ import { Route as OrderRouteImport } from './routes/order'
 import { Route as HistoryRouteImport } from './routes/history'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AdminLayoutRouteImport } from './routes/admin/_layout'
+import { Route as AdminLayoutIndexRouteImport } from './routes/admin/_layout.index'
+import { Route as AdminLayoutLoginRouteImport } from './routes/admin/_layout.login'
+import { Route as AdminLayoutOrdersNewRouteImport } from './routes/admin/_layout.orders.new'
 
 const SubscribeRoute = SubscribeRouteImport.update({
   id: '/subscribe',
@@ -52,6 +56,26 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminLayoutRoute = AdminLayoutRouteImport.update({
+  id: '/admin/_layout',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminLayoutIndexRoute = AdminLayoutIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminLayoutRoute,
+} as any)
+const AdminLayoutLoginRoute = AdminLayoutLoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => AdminLayoutRoute,
+} as any)
+const AdminLayoutOrdersNewRoute = AdminLayoutOrdersNewRouteImport.update({
+  id: '/orders/new',
+  path: '/orders/new',
+  getParentRoute: () => AdminLayoutRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -61,6 +85,10 @@ export interface FileRoutesByFullPath {
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/subscribe': typeof SubscribeRoute
+  '/admin': typeof AdminLayoutRouteWithChildren
+  '/admin/login': typeof AdminLayoutLoginRoute
+  '/admin/': typeof AdminLayoutIndexRoute
+  '/admin/orders/new': typeof AdminLayoutOrdersNewRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -70,6 +98,9 @@ export interface FileRoutesByTo {
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/subscribe': typeof SubscribeRoute
+  '/admin/login': typeof AdminLayoutLoginRoute
+  '/admin': typeof AdminLayoutIndexRoute
+  '/admin/orders/new': typeof AdminLayoutOrdersNewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -80,6 +111,10 @@ export interface FileRoutesById {
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/subscribe': typeof SubscribeRoute
+  '/admin/_layout': typeof AdminLayoutRouteWithChildren
+  '/admin/_layout/login': typeof AdminLayoutLoginRoute
+  '/admin/_layout/': typeof AdminLayoutIndexRoute
+  '/admin/_layout/orders/new': typeof AdminLayoutOrdersNewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -91,6 +126,10 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/reset-password'
     | '/subscribe'
+    | '/admin'
+    | '/admin/login'
+    | '/admin/'
+    | '/admin/orders/new'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -100,6 +139,9 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/reset-password'
     | '/subscribe'
+    | '/admin/login'
+    | '/admin'
+    | '/admin/orders/new'
   id:
     | '__root__'
     | '/'
@@ -109,6 +151,10 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/reset-password'
     | '/subscribe'
+    | '/admin/_layout'
+    | '/admin/_layout/login'
+    | '/admin/_layout/'
+    | '/admin/_layout/orders/new'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -119,6 +165,7 @@ export interface RootRouteChildren {
   PrivacyRoute: typeof PrivacyRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SubscribeRoute: typeof SubscribeRoute
+  AdminLayoutRoute: typeof AdminLayoutRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -172,8 +219,52 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/_layout': {
+      id: '/admin/_layout'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminLayoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/_layout/': {
+      id: '/admin/_layout/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminLayoutIndexRouteImport
+      parentRoute: typeof AdminLayoutRoute
+    }
+    '/admin/_layout/login': {
+      id: '/admin/_layout/login'
+      path: '/login'
+      fullPath: '/admin/login'
+      preLoaderRoute: typeof AdminLayoutLoginRouteImport
+      parentRoute: typeof AdminLayoutRoute
+    }
+    '/admin/_layout/orders/new': {
+      id: '/admin/_layout/orders/new'
+      path: '/orders/new'
+      fullPath: '/admin/orders/new'
+      preLoaderRoute: typeof AdminLayoutOrdersNewRouteImport
+      parentRoute: typeof AdminLayoutRoute
+    }
   }
 }
+
+interface AdminLayoutRouteChildren {
+  AdminLayoutLoginRoute: typeof AdminLayoutLoginRoute
+  AdminLayoutIndexRoute: typeof AdminLayoutIndexRoute
+  AdminLayoutOrdersNewRoute: typeof AdminLayoutOrdersNewRoute
+}
+
+const AdminLayoutRouteChildren: AdminLayoutRouteChildren = {
+  AdminLayoutLoginRoute: AdminLayoutLoginRoute,
+  AdminLayoutIndexRoute: AdminLayoutIndexRoute,
+  AdminLayoutOrdersNewRoute: AdminLayoutOrdersNewRoute,
+}
+
+const AdminLayoutRouteWithChildren = AdminLayoutRoute._addFileChildren(
+  AdminLayoutRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -183,6 +274,7 @@ const rootRouteChildren: RootRouteChildren = {
   PrivacyRoute: PrivacyRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SubscribeRoute: SubscribeRoute,
+  AdminLayoutRoute: AdminLayoutRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

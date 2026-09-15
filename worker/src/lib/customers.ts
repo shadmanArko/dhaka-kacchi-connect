@@ -42,7 +42,22 @@ export type PublicCustomer = {
   address: AddressFields;
 };
 
+// An explicit allowlist, not a subtractive spread ({ passwordHash: _, ...rest })
+// - callers that pass a CustomerAuthRecord (findByPhoneOrEmail's return
+// type, a CustomerRecord widened with failedLoginCount/lockedUntil) would
+// otherwise leak those two fields into the response at runtime despite
+// the PublicCustomer return type claiming otherwise, since a spread
+// carries every property the real object has, not just the ones a type
+// annotation names. Caught while building the admin customer-search
+// endpoint, which calls this on the same findByPhoneOrEmail result
+// POST /auth/login already did - that route had this exact leak too.
 export function toPublicCustomer(customer: CustomerRecord): PublicCustomer {
-  const { passwordHash: _passwordHash, createdAt: _createdAt, ...rest } = customer;
-  return rest;
+  return {
+    id: customer.id,
+    phone: customer.phone,
+    email: customer.email,
+    name: customer.name,
+    dateOfBirth: customer.dateOfBirth,
+    address: customer.address,
+  };
 }

@@ -48,6 +48,8 @@ DROP TABLE IF EXISTS sessions;
 DROP TABLE IF EXISTS password_reset_tokens;
 DROP TABLE IF EXISTS otp_codes;
 DROP TABLE IF EXISTS customers;
+DROP TABLE IF EXISTS admin_sessions;
+DROP TABLE IF EXISTS admin_users;
 
 CREATE TABLE IF NOT EXISTS customers (
   id                    TEXT PRIMARY KEY,               -- e.g. "cust_<uuid>"
@@ -136,6 +138,34 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions(token_hash);
 CREATE INDEX IF NOT EXISTS idx_sessions_customer_id ON sessions(customer_id);
 
+-- Staff/owner accounts for the admin panel (manual order entry, discounts,
+-- status updates) - a completely separate identity space from `customers`/
+-- `sessions` above, never sharing a token namespace with a customer login.
+-- In production these are additionally locked down so the warehouse's
+-- read-only `ordering_reader` role (see the sibling harness repo's
+-- postgres-init script) can never read password/token hashes here - see
+-- migrations-manual/0001_admin_and_order_extensions.sql, which is how this
+-- table actually reaches the live database (never via `npm run db:migrate`,
+-- which would DROP TABLE every real order first - see the top of this file).
+CREATE TABLE IF NOT EXISTS admin_users (
+  id             TEXT PRIMARY KEY,           -- e.g. "adm_<uuid>"
+  created_at     TEXT NOT NULL,
+  email          TEXT NOT NULL,
+  password_hash  TEXT NOT NULL,              -- bcrypt hash; the real password is never stored
+  name           TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_users_email ON admin_users(email);
+
+CREATE TABLE IF NOT EXISTS admin_sessions (
+  id             TEXT PRIMARY KEY,           -- e.g. "asess_<uuid>"
+  created_at     TEXT NOT NULL,
+  expires_at     TIMESTAMPTZ NOT NULL,
+  admin_user_id  TEXT NOT NULL REFERENCES admin_users(id),
+  token_hash     TEXT NOT NULL               -- sha256 of the bearer token; raw token never stored
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_sessions_token_hash ON admin_sessions(token_hash);
+CREATE INDEX IF NOT EXISTS idx_admin_sessions_admin_user_id ON admin_sessions(admin_user_id);
+
 CREATE TABLE IF NOT EXISTS orders (
   id                    TEXT PRIMARY KEY,               -- e.g. "ord_<uuid>"
   created_at            TEXT NOT NULL,                  -- ISO 8601 UTC
@@ -164,11 +194,30 @@ CREATE TABLE IF NOT EXISTS orders (
   customer_email        TEXT NOT NULL,
   customer_phone        TEXT NOT NULL,
   notes                 TEXT,
-  subtotal_cents        INTEGER NOT NULL,                -- items only, excludes delivery_fee_cents
+  subtotal_cents        INTEGER NOT NULL,                -- items only, excludes delivery_fee_cents/discount_cents
   payment_method        TEXT NOT NULL DEFAULT 'cash_on_delivery',
-  status                TEXT NOT NULL DEFAULT 'received', -- received | confirmed | delivered | cancelled
+  status                TEXT NOT NULL DEFAULT 'received' -- received | confirmed | delivered | cancelled
+                          CHECK (status IN ('received', 'confirmed', 'delivered', 'cancelled')),
   email_sent            BOOLEAN NOT NULL DEFAULT FALSE,
-  telegram_sent         BOOLEAN NOT NULL DEFAULT FALSE   -- replaces whatsapp_sent - see telegram.ts
+  telegram_sent         BOOLEAN NOT NULL DEFAULT FALSE,  -- replaces whatsapp_sent - see telegram.ts
+
+  -- Staff-applied discount (admin panel only - see worker/CLAUDE.md).
+  -- Current state, not a log: applying a new discount REPLACES these
+  -- three fields rather than accumulating. subtotal_cents above is never
+  -- touched by a discount - it stays a pure function of priceOrder()/menu
+  -- prices, so orders.ts::totalCents() is the one place that combines
+  -- subtotal + delivery fee - discount into what the customer actually
+  -- owes. See ordersRepository.ts's applyDiscount().
+  discount_cents        INTEGER NOT NULL DEFAULT 0
+                          CHECK (discount_cents >= 0 AND discount_cents <= subtotal_cents + delivery_fee_cents),
+  discount_reason       TEXT,
+  discounted_at         TIMESTAMPTZ,
+
+  -- 'staff' for an order entered via the admin panel on a customer's
+  -- behalf (phone/WhatsApp order); 'customer' for the normal self-serve
+  -- flow. Reporting-only today - see worker/CLAUDE.md.
+  created_by            TEXT NOT NULL DEFAULT 'customer'
+                          CHECK (created_by IN ('customer', 'staff'))
 );
 
 CREATE TABLE IF NOT EXISTS order_items (
