@@ -10,44 +10,128 @@
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 
+/** Plain DB reads. Long enough for a cold backend, short enough that a dead
+ * connection doesn't hang a button forever. Endpoints that wait on outbound
+ * side effects (email/SMS/Telegram) override this - see the wrappers below. */
+const DEFAULT_TIMEOUT_MS = 20_000;
+const MESSAGE_MAX = 300;
+const DETAIL_MAX = 500;
+
+export type ApiErrorKind = "config" | "timeout" | "network" | "http";
+
 export class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
+    /** Why this failed. Distinguishes a timeout/offline from a real HTTP
+     * error - `status` can't, because 0 already means "never reached the
+     * network". Callers that must react differently (order submission) branch
+     * on this; everything else just renders `message`. */
+    public readonly kind: ApiErrorKind = "http",
+    /** Truncated raw response body. For logs/error reporting only - never
+     * render this, it's exactly the untrusted text `message` exists to keep
+     * out of the UI. */
+    public readonly detail?: string,
   ) {
     super(message);
+    this.name = "ApiError";
   }
 }
 
-export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+export type ApiFetchOptions = {
+  timeoutMs?: number;
+};
+
+function statusMessage(status: number): string {
+  if (status === 401) return "Your session has expired. Please log in again.";
+  if (status === 403) return "You don't have access to that.";
+  if (status === 404) return "We couldn't find that.";
+  if (status === 409) return "That conflicts with something that already exists.";
+  if (status === 429) return "Too many attempts. Please wait a moment and try again.";
+  if (status >= 400 && status < 500) return "That didn't look right. Please check and try again.";
+  return "Something went wrong on our end. Please try again in a moment.";
+}
+
+/** The worker answers every error as { error: <machine_code>, message: <human
+ * string> }. Only `message` is ever safe to show: `error` is a code like
+ * "unauthorized" or "invalid_items". Anything that isn't a short, markup-free
+ * string is rejected in favour of a generic message - a proxy's HTML error
+ * page, a gateway interstitial or a stack trace must never reach the UI, and
+ * order.tsx previously forwarded this same string to PostHog too. */
+function isDisplayableMessage(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    value.trim().length > 0 &&
+    value.length <= MESSAGE_MAX &&
+    !value.includes("<")
+  );
+}
+
+export async function apiFetch<T>(
+  path: string,
+  init?: RequestInit,
+  options?: ApiFetchOptions,
+): Promise<T> {
   if (!API_BASE) {
-    throw new ApiError(0, "VITE_API_BASE_URL is not configured");
+    throw new ApiError(0, "VITE_API_BASE_URL is not configured", "config");
   }
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      ...(init?.headers ?? {}),
-    },
-  });
-  if (!res.ok) {
-    // The worker's error responses are JSON, e.g. { error: "..." } or
-    // { error: "...", message: "..." } — surface the human-readable field,
-    // not the raw response body. Falls back to the raw text only if the body
-    // isn't the JSON shape we expect, so a non-JSON error (a proxy's HTML
-    // error page, say) still shows something rather than throwing again.
-    const raw = await res.text().catch(() => res.statusText);
-    let friendly = raw;
-    try {
-      const body = JSON.parse(raw) as { message?: unknown; error?: unknown };
-      if (typeof body.message === "string") friendly = body.message;
-      else if (typeof body.error === "string") friendly = body.error;
-    } catch {
-      // not JSON — keep the raw text
+
+  // A manual AbortController rather than AbortSignal.timeout/any: those need
+  // Safari 17.4+, and this site's traffic is heavily mobile Safari.
+  const controller = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, options?.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+  const onExternalAbort = () => controller.abort();
+  init?.signal?.addEventListener("abort", onExternalAbort);
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      ...init,
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        ...(init?.headers ?? {}),
+      },
+    });
+  } catch (err) {
+    if (timedOut) {
+      throw new ApiError(
+        0,
+        "That took too long. Please check your connection and try again.",
+        "timeout",
+      );
     }
-    throw new ApiError(res.status, friendly);
+    // A caller-initiated cancel is not an error condition - propagate as-is.
+    if (init?.signal?.aborted) throw err;
+    throw new ApiError(
+      0,
+      "Couldn't reach the server. Please check your connection and try again.",
+      "network",
+      err instanceof Error ? err.message : undefined,
+    );
+  } finally {
+    clearTimeout(timer);
+    init?.signal?.removeEventListener("abort", onExternalAbort);
   }
+
+  if (!res.ok) {
+    const raw = await res.text().catch(() => "");
+    let friendly = statusMessage(res.status);
+    try {
+      const body = JSON.parse(raw) as { message?: unknown };
+      if (isDisplayableMessage(body.message)) friendly = body.message.trim();
+    } catch {
+      // Not JSON at all (proxy HTML page, gateway text) - keep the generic
+      // message rather than echoing the body.
+    }
+    throw new ApiError(res.status, friendly, "http", raw.slice(0, DETAIL_MAX));
+  }
+
   return (await res.json()) as T;
 }
 
@@ -217,6 +301,15 @@ function buildQuery(params: Record<string, string | undefined>): string {
   return query ? `?${query}` : "";
 }
 
+// Endpoints whose handler awaits an outbound side effect (SMTP, SMS,
+// Telegram) BEFORE responding get a much longer timeout than a plain read.
+// worker/src/index.ts commits the order and then awaits emitOrderCreated(),
+// which fans out to email + Telegram and waits for all of them, so a short
+// timeout here would abort after the order already exists and the customer's
+// confirmation email has already gone out - and the customer would re-submit.
+const SIDE_EFFECT_TIMEOUT_MS = 45_000;
+const ORDER_TIMEOUT_MS = 60_000;
+
 export const api = {
   subscribe: (email: string) =>
     apiFetch<{ ok: true }>("/subscribe", {
@@ -240,18 +333,26 @@ export const api = {
       `/v1/postal-code-check?postalCode=${encodeURIComponent(postalCode)}`,
     ),
   submitOrder: (order: OrderInput, token: string) =>
-    apiFetch<OrderResult>("/v1/orders", {
-      method: "POST",
-      headers: authHeader(token),
-      body: JSON.stringify(order),
-    }),
+    apiFetch<OrderResult>(
+      "/v1/orders",
+      {
+        method: "POST",
+        headers: authHeader(token),
+        body: JSON.stringify(order),
+      },
+      { timeoutMs: ORDER_TIMEOUT_MS },
+    ),
 
   // --- Customer accounts ---
   register: (input: RegisterInput) =>
-    apiFetch<{ phone: string; expiresAt: string; message: string }>("/v1/auth/register", {
-      method: "POST",
-      body: JSON.stringify(input),
-    }),
+    apiFetch<{ phone: string; expiresAt: string; message: string }>(
+      "/v1/auth/register",
+      {
+        method: "POST",
+        body: JSON.stringify(input),
+      },
+      { timeoutMs: SIDE_EFFECT_TIMEOUT_MS }, // awaits sendOtpSms
+    ),
   verifyOtp: (input: { phone: string; code: string }) =>
     apiFetch<AuthResult>("/v1/auth/verify-otp", {
       method: "POST",
@@ -267,10 +368,14 @@ export const api = {
   getMe: (token: string) =>
     apiFetch<{ customer: PublicCustomer }>("/v1/me", { headers: authHeader(token) }),
   requestPasswordReset: (email: string) =>
-    apiFetch<{ message: string }>("/v1/auth/password-reset/request", {
-      method: "POST",
-      body: JSON.stringify({ email }),
-    }),
+    apiFetch<{ message: string }>(
+      "/v1/auth/password-reset/request",
+      {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      },
+      { timeoutMs: SIDE_EFFECT_TIMEOUT_MS }, // awaits sendPasswordResetEmail
+    ),
   confirmPasswordReset: (token: string, newPassword: string) =>
     apiFetch<{ message: string }>("/v1/auth/password-reset/confirm", {
       method: "POST",
@@ -302,21 +407,33 @@ export const adminApi = {
       { headers: authHeader(token) },
     ),
   createOrder: (token: string, input: AdminOrderInput) =>
-    apiFetch<{ order: AdminOrder }>("/v1/admin/orders", {
-      method: "POST",
-      headers: authHeader(token),
-      body: JSON.stringify(input),
-    }),
+    apiFetch<{ order: AdminOrder }>(
+      "/v1/admin/orders",
+      {
+        method: "POST",
+        headers: authHeader(token),
+        body: JSON.stringify(input),
+      },
+      { timeoutMs: ORDER_TIMEOUT_MS }, // awaits emitOrderCreated, same as the public route
+    ),
   applyDiscount: (token: string, orderId: string, input: AdminDiscountInput) =>
-    apiFetch<{ order: AdminOrder }>(`/v1/admin/orders/${encodeURIComponent(orderId)}/discount`, {
-      method: "PATCH",
-      headers: authHeader(token),
-      body: JSON.stringify(input),
-    }),
+    apiFetch<{ order: AdminOrder }>(
+      `/v1/admin/orders/${encodeURIComponent(orderId)}/discount`,
+      {
+        method: "PATCH",
+        headers: authHeader(token),
+        body: JSON.stringify(input),
+      },
+      { timeoutMs: SIDE_EFFECT_TIMEOUT_MS }, // awaits discount email + Telegram
+    ),
   updateStatus: (token: string, orderId: string, status: OrderStatus) =>
-    apiFetch<{ order: AdminOrder }>(`/v1/admin/orders/${encodeURIComponent(orderId)}/status`, {
-      method: "PATCH",
-      headers: authHeader(token),
-      body: JSON.stringify({ status }),
-    }),
+    apiFetch<{ order: AdminOrder }>(
+      `/v1/admin/orders/${encodeURIComponent(orderId)}/status`,
+      {
+        method: "PATCH",
+        headers: authHeader(token),
+        body: JSON.stringify({ status }),
+      },
+      { timeoutMs: SIDE_EFFECT_TIMEOUT_MS }, // may fan out to email + Telegram
+    ),
 };

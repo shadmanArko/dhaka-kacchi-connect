@@ -117,12 +117,17 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
       setStep("otp");
       trackEvent("auth_registration_started");
     } catch (err) {
-      const message =
+      setError(
         err instanceof ApiError
           ? err.message
-          : "Couldn't start registration right now. Please try again.";
-      setError(message);
-      trackEvent("auth_registration_failed", { error: message });
+          : "Couldn't start registration right now. Please try again.",
+      );
+      // No free-text `error` property - a validation message can echo the
+      // registrant's own input into PostHog. Status + kind aggregate better.
+      trackEvent("auth_registration_failed", {
+        status: err instanceof ApiError ? err.status : null,
+        kind: err instanceof ApiError ? err.kind : "unknown",
+      });
     } finally {
       setBusy(false);
     }

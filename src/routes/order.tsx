@@ -277,12 +277,26 @@ function OrderPage() {
       trackEvent("order_submitted", { fulfillmentType, totalCents, itemCount });
     } catch (err) {
       setSubmitState("error");
-      const message =
-        err instanceof ApiError
+      // A timeout here does NOT mean the order failed. worker/src/index.ts
+      // commits the order and only then awaits the email + Telegram fan-out,
+      // so a slow notification can time us out after the order already exists
+      // and the customer's confirmation email has already been sent. Telling
+      // them to "try again" would produce a duplicate order on the one day of
+      // the week this business takes orders.
+      const timedOut = err instanceof ApiError && err.kind === "timeout";
+      const message = timedOut
+        ? "Your order may have gone through — we're just slow confirming it. Please don't re-submit; check your email for a confirmation, or message us on WhatsApp below."
+        : err instanceof ApiError
           ? err.message
           : "Couldn't place your order right now. Please try again, or order via WhatsApp below.";
       setSubmitError(message);
-      trackEvent("order_submission_failed", { error: message });
+      // Deliberately no free-text `error` property: it could echo the
+      // customer's own input back into PostHog. Status + kind aggregate
+      // better in a funnel anyway.
+      trackEvent("order_submission_failed", {
+        status: err instanceof ApiError ? err.status : null,
+        kind: err instanceof ApiError ? err.kind : "unknown",
+      });
     }
   }
 

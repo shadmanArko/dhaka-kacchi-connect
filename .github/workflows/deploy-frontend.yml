@@ -57,12 +57,39 @@ jobs:
       # client libraries. Safe to use in public apps." per PostHog's own
       # settings page), not a secret - same reasoning as VITE_API_BASE_URL
       # above.
+      # VITE_SENTRY_DSN is likewise publishable - a DSN ships inside every
+      # browser bundle by construction and can only be used to send events
+      # in. SENTRY_AUTH_TOKEN below is NOT publishable: it is a real repo
+      # secret, and it is what gates source-map generation and upload (see
+      # vite.config.ts). VITE_SENTRY_RELEASE must be the same value the
+      # runtime SDK reports, or uploaded maps never match the events and
+      # every stack frame silently stays minified.
       - name: Build static site
         env:
           VITE_API_BASE_URL: https://api.dhakakacchi.com
           VITE_POSTHOG_KEY: phc_mswvAnS2262YdsUypEMZWiiVDmqZWn4aSV5KSgw3yQip
           VITE_POSTHOG_HOST: https://eu.i.posthog.com
+          VITE_SENTRY_DSN: https://4a7f4dd06d8207f18173c216d105370c@o4512084967358464.ingest.de.sentry.io/4512091504050256
+          VITE_SENTRY_ENVIRONMENT: production
+          VITE_SENTRY_RELEASE: ${{ github.sha }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: dhaka-kacchi-frontend
         run: bun run build:static
+
+      # dist-static/ is FTP'd verbatim into a public docroot, so a stray .map
+      # would publish the entire frontend source. vite.config.ts is written so
+      # maps are only ever generated when they are also deleted after upload -
+      # this is the independent check that the two halves actually stayed in
+      # sync, and it runs BEFORE anything is transferred.
+      - name: Assert no source maps in deploy output
+        run: |
+          if [ -n "$(find dist-static -name '*.map' -print -quit)" ]; then
+            echo "::error::source maps present in dist-static/ - refusing to deploy"
+            find dist-static -name '*.map'
+            exit 1
+          fi
+          echo "no source maps in dist-static/ - safe to deploy"
 
       # This Hostinger plan's hPanel only exposes plain FTP (port 21), not
       # SFTP - see hPanel > Files > FTP Accounts. Same secret names either
