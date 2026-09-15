@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { formatEuro, formatDate } from "@/lib/format";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { MessageCircle } from "lucide-react";
 import { PageHero } from "@/components/sections/PageHero";
@@ -46,19 +47,6 @@ type QuoteState = "idle" | "checking" | "ready" | "error";
 type FulfillmentType = "pickup" | "delivery";
 
 const PICKUP_LABEL = "Leopoldplatz, Wedding — in front of Lidl";
-
-function formatEuro(cents: number) {
-  return `€${(cents / 100).toFixed(2)}`;
-}
-
-function formatDate(iso: string) {
-  return new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-GB", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    timeZone: "UTC",
-  });
-}
 
 function quoteErrorMessage(quote: PostalCodeCheckResult): string {
   if (quote.deliverable) return "";

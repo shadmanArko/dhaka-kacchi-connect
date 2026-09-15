@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { formatEuro, formatDate } from "@/lib/format";
 import { toast } from "sonner";
 import { adminApi, ApiError, type AdminOrder, type OrderStatus } from "@/lib/api";
 import {
@@ -29,19 +30,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
-function formatEuro(cents: number) {
-  return `€${(cents / 100).toFixed(2)}`;
-}
-
-function formatDate(iso: string) {
-  return new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-GB", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    timeZone: "UTC",
-  });
-}
 
 const DISCOUNT_PRESETS_CENTS = [200, 500, 1000];
 const STATUS_OPTIONS: OrderStatus[] = ["received", "confirmed", "delivered", "cancelled"];

@@ -5,7 +5,10 @@
     "jsx": "react-jsx",
     "module": "ESNext",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["vite/client"],
+    /* "bun" supplies the `bun:test` module types used by *.test.ts. Without
+       it `bunx tsc --noEmit` fails on the test files, which CI runs before
+       the tests themselves. */
+    "types": ["vite/client", "bun"],
 
     /* Bundler mode */
     "moduleResolution": "Bundler",

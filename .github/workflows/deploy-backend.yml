@@ -35,6 +35,12 @@ jobs:
         working-directory: worker
         run: npm run typecheck
 
+      # The Friday-18:00-Berlin cutoff decides whether an order can be
+      # placed at all - the highest-consequence pure logic here.
+      - name: Test
+        working-directory: worker
+        run: npx --yes bun test src/
+
       # Deliberately does NOT run `npm run db:migrate` - schema.sql's
       # migration drops and recreates tables (see worker/CLAUDE.md), so it
       # must stay a deliberate, backed-up, human-run step, never automatic.

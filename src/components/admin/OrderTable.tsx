@@ -1,4 +1,5 @@
 import type { AdminOrder, OrderStatus } from "@/lib/api";
+import { formatEuro, formatDate } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -8,18 +9,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-function formatEuro(cents: number) {
-  return `€${(cents / 100).toFixed(2)}`;
-}
-
-function formatDate(iso: string) {
-  return new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    timeZone: "UTC",
-  });
-}
 
 const STATUS_VARIANT: Record<OrderStatus, "secondary" | "default" | "outline" | "destructive"> = {
   received: "secondary",
@@ -90,7 +79,7 @@ export function OrderTable({
               </TableCell>
               <TableCell className="hidden sm:table-cell">{order.customerPhone}</TableCell>
               <TableCell className="hidden md:table-cell">
-                {formatDate(order.deliveryDate)}
+                {formatDate(order.deliveryDate, "short")}
               </TableCell>
               <TableCell className="hidden md:table-cell capitalize">
                 {order.fulfillmentType}

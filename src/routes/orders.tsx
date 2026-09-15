@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { formatEuro, formatDate } from "@/lib/format";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { PageHero } from "@/components/sections/PageHero";
 import { Reveal } from "@/components/ui/Reveal";
@@ -32,19 +33,6 @@ export const Route = createFileRoute("/orders")({
 });
 
 type LoadState = "loading" | "ready" | "error";
-
-function formatEuro(cents: number) {
-  return `€${(cents / 100).toFixed(2)}`;
-}
-
-function formatDate(iso: string) {
-  return new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-GB", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    timeZone: "UTC",
-  });
-}
 
 const STATUS_COPY: Record<CustomerOrder["status"], string> = {
   received: "Received",

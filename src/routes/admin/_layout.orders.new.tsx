@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { formatEuro } from "@/lib/format";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import {
@@ -23,10 +24,6 @@ export const Route = createFileRoute("/admin/_layout/orders/new")({
 });
 
 type LoadState = "loading" | "ready" | "error";
-
-function formatEuro(cents: number) {
-  return `€${(cents / 100).toFixed(2)}`;
-}
 
 // Mirrors worker/src/lib/dates.ts's isValidSaturday - the backend is the
 // real authority (this is a client-side convenience check only, to catch a

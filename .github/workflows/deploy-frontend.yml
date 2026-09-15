@@ -40,6 +40,12 @@ jobs:
       - name: Lint
         run: bun run lint
 
+      # Gates the deploy on the pure logic that has no other safety net:
+      # the cart's restore guards and apiFetch's error sanitisation and
+      # timeout handling. Until now CI shipped on typecheck + lint alone.
+      - name: Test
+        run: bun run test
+
       # Produces dist-static/ - see scripts/build-static.mjs for why this
       # isn't a plain `vite build`: Nitro's own static-prerender preset is
       # broken for TanStack Start in this dependency combo (tracked
