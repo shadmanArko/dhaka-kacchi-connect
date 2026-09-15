@@ -97,6 +97,12 @@ function OrderPage() {
 
   const [submitState, setSubmitState] = useState<SubmitState>("idle");
   const [submitError, setSubmitError] = useState("");
+  // A timeout is the one failure where re-submitting is actively dangerous:
+  // the backend commits the order BEFORE it awaits the confirmation email and
+  // Telegram fan-out, so a slow notification can time us out after the order
+  // already exists. We tell the customer not to re-submit - this is what makes
+  // the button agree with that advice instead of contradicting it.
+  const [submitTimedOut, setSubmitTimedOut] = useState(false);
   const [result, setResult] = useState<OrderResult | null>(null);
 
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -249,6 +255,7 @@ function OrderPage() {
 
     setSubmitState("submitting");
     setSubmitError("");
+    setSubmitTimedOut(false);
     try {
       const items = Object.entries(quantities)
         .filter(([, qty]) => qty > 0)
@@ -290,6 +297,7 @@ function OrderPage() {
           ? err.message
           : "Couldn't place your order right now. Please try again, or order via WhatsApp below.";
       setSubmitError(message);
+      setSubmitTimedOut(timedOut);
       // Deliberately no free-text `error` property: it could echo the
       // customer's own input back into PostHog. Status + kind aggregate
       // better in a funnel anyway.
@@ -626,13 +634,52 @@ function OrderPage() {
               </div>
 
               {submitState === "error" && (
-                <p className="font-sans text-sm text-red-400">{submitError}</p>
+                <div className="space-y-4">
+                  <p className="font-sans text-sm text-red-400">{submitError}</p>
+                  {/* The copy above promises WhatsApp "below" - this is it.
+                      Previously the only buildWaLink call on this page lived in
+                      the loadState === "error" branch, which is mutually
+                      exclusive with this form, so the promise was unkeepable. */}
+                  <a
+                    href={buildWaLink(
+                      submitTimedOut
+                        ? `Hi Dhaka Kacchi — I placed an order for ${formatDate(deliveryDate)} (${formatEuro(totalCents)}) but didn't get a confirmation. Can you check whether it came through?`
+                        : `Hi Dhaka Kacchi — I'd like to order for ${formatDate(deliveryDate)} (${formatEuro(totalCents)}). The website couldn't place it.`,
+                    )}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-3 bg-[#25D366] text-white px-8 py-4 font-sans text-[0.78rem] uppercase tracking-[0.2em] transition-all hover:-translate-y-0.5 hover:bg-[#1da851]"
+                  >
+                    <MessageCircle size={18} />
+                    <span>{submitTimedOut ? "Check on WhatsApp" : "Order on WhatsApp"}</span>
+                  </a>
+                  {submitTimedOut && (
+                    // An escape hatch, deliberately opt-in and deliberately not
+                    // a button that looks like the primary action: if the order
+                    // genuinely failed the customer must not be permanently
+                    // stuck, but re-submitting after a timeout is the one path
+                    // that can produce a duplicate.
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSubmitTimedOut(false);
+                        setSubmitError("");
+                        setSubmitState("idle");
+                      }}
+                      className="block font-sans text-[0.78rem] text-muted-warm underline underline-offset-4 hover:text-cream transition-colors"
+                    >
+                      I checked — no confirmation arrived. Let me try again.
+                    </button>
+                  )}
+                </div>
               )}
 
               <button
                 type="submit"
                 disabled={
-                  session.customer ? !canSubmit || submitState === "submitting" : !canCheckout
+                  session.customer
+                    ? !canSubmit || submitState === "submitting" || submitTimedOut
+                    : !canCheckout
                 }
                 className="w-full bg-gold text-black-ink px-9 py-5 font-sans text-[0.8rem] uppercase tracking-[0.25em] hover:bg-gold-2 transition-colors disabled:opacity-50"
               >
