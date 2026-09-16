@@ -25,7 +25,21 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # Action majors are kept current because GitHub retires the Node runtime
+      # underneath them: v4 of these targeted Node 20, which is deprecated and
+      # only still running because GitHub force-runs it on Node 24. That grace
+      # period ends on their schedule, not ours, and when it does the deploy
+      # breaks with no warning.
+      #
+      # The breaking changes in these majors were each checked against how
+      # THIS workflow uses them, and none apply:
+      #   - checkout v5/v6/v7 restrict pull_request_target / workflow_run
+      #     checkouts. This workflow triggers on push and workflow_dispatch
+      #     only - it has no PR events at all.
+      #   - upload-artifact v7 moved to ESM and added an optional `archive`
+      #     input. The four inputs used below are unchanged, and `archive`
+      #     is deliberately not set.
+      - uses: actions/checkout@v7
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -116,7 +130,7 @@ jobs:
       # same server-dir with any FTP client. 30 days covers the window in
       # which anyone would still want the old site; past that, rebuild.
       - name: Archive the deployed bundle for rollback
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dist-static
           path: dist-static/
@@ -148,7 +162,7 @@ jobs:
       # top-level public_html/ (unchanged) vs. a public_html/public_html/
       # subfolder that appeared right after a deploy run.
       - name: Deploy to Hostinger over FTP
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
         with:
           server: ${{ secrets.HOSTINGER_SFTP_HOST }}
           port: ${{ secrets.HOSTINGER_SFTP_PORT }}

@@ -17,11 +17,22 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # Majors kept current for the same reason as deploy-frontend.yml: v4 of
+      # these targeted Node 20, which GitHub now only runs by forcing it onto
+      # Node 24, and that grace period ends on their schedule.
+      #
+      # fetch-depth: 2 is still required - the schema.sql check below diffs
+      # HEAD against HEAD~1, which a depth-1 checkout cannot do.
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 2
 
-      - uses: actions/setup-node@v4
+      # setup-node v5 began caching automatically when package.json carries a
+      # `packageManager` field, which would be a behaviour change here.
+      # Neither package.json in this repo has that field, and the cache is
+      # configured explicitly below regardless, so the new default never
+      # engages. v6 narrowed that automatic caching to npm; v7 moved to ESM.
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -52,7 +63,7 @@ jobs:
         continue-on-error: true
 
       - name: Deploy over SSH
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v1.2.5
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
