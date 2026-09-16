@@ -200,6 +200,7 @@ jobs:
           port: ${{ secrets.HOSTINGER_SFTP_PORT }}
           username: ${{ secrets.HOSTINGER_SFTP_USERNAME }}
           password: ${{ secrets.HOSTINGER_SFTP_PASSWORD }}
-          protocol: ftp
+          protocol: ftps
+          security: loose
           local-dir: ./dist-static/
           server-dir: ./
