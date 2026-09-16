@@ -1,13 +1,17 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "@tanstack/react-router";
+import { useTranslation } from "react-i18next";
 import { Menu, X } from "lucide-react";
 import { nav, orderCTA, site } from "@/content/site";
+import { LocaleLink } from "@/components/layout/LocaleLink";
+import { LanguageSwitcher } from "@/components/layout/LanguageSwitcher";
 import { useScrolled } from "@/hooks/useScrolled";
 import { useSession } from "@/hooks/useSession";
 import { cn } from "@/lib/utils";
 import logo from "@/assets/logo-nav.png";
 
 export function SiteHeader() {
+  const { t } = useTranslation();
   const scrolled = useScrolled();
   const [open, setOpen] = useState(false);
   const { pathname } = useLocation();
@@ -32,18 +36,22 @@ export function SiteHeader() {
             : "h-[72px] bg-transparent border-b border-transparent",
         )}
       >
-        <Link to="/" aria-label={`${site.name} — Home`} className="flex items-center shrink-0">
+        <LocaleLink
+          to="/"
+          aria-label={`${site.name} — Home`}
+          className="flex items-center shrink-0"
+        >
           <img
             src={logo}
             alt={site.name}
             className="h-12 w-auto object-contain"
             style={{ filter: "invert(1) sepia(1) saturate(2) hue-rotate(5deg) brightness(1.1)" }}
           />
-        </Link>
+        </LocaleLink>
 
         <nav aria-label="Primary" className="hidden md:flex items-center gap-8">
           {nav.map((item) => (
-            <Link
+            <LocaleLink
               key={item.to}
               to={item.to}
               activeOptions={{ exact: true }}
@@ -51,13 +59,15 @@ export function SiteHeader() {
               inactiveProps={{ className: "text-muted-warm hover:text-gold" }}
               className="font-sans text-[0.72rem] uppercase tracking-[0.15em] transition-colors whitespace-nowrap"
             >
-              {item.label}
-            </Link>
+              {t(item.labelKey)}
+            </LocaleLink>
           ))}
           {/* Signed-in customers only. The page redirects anyone else away, so
               showing this to a logged-out visitor would just be a dead end.
               `nav` in content/site.ts stays static - it's shared with the
-              mobile menu and has no notion of a session. */}
+              mobile menu and has no notion of a session. Not locale-prefixed:
+              a signed-in customer's own order history isn't translated (see
+              scripts/build-static.mjs ROUTES). */}
           {session.customer && (
             <Link
               to="/orders"
@@ -66,20 +76,21 @@ export function SiteHeader() {
               inactiveProps={{ className: "text-muted-warm hover:text-gold" }}
               className="font-sans text-[0.72rem] uppercase tracking-[0.15em] transition-colors whitespace-nowrap"
             >
-              My Orders
+              {t("nav.myOrders")}
             </Link>
           )}
-          <Link
+          <LocaleLink
             to={orderCTA.to}
             className="inline-flex items-center gap-2 border border-gold text-gold px-6 py-2.5 font-sans text-[0.72rem] uppercase tracking-[0.15em] transition-colors hover:bg-gold hover:text-black-ink"
           >
-            {orderCTA.label}
-          </Link>
+            {t(orderCTA.labelKey)}
+          </LocaleLink>
+          <LanguageSwitcher />
         </nav>
 
         <button
           className="md:hidden text-gold p-2"
-          aria-label={open ? "Close menu" : "Open menu"}
+          aria-label={open ? t("common.closeMenu") : t("common.openMenu")}
           aria-expanded={open}
           onClick={() => setOpen((v) => !v)}
         >
@@ -107,22 +118,23 @@ export function SiteHeader() {
           onClick={(e) => e.stopPropagation()}
         >
           {nav.map((item) => (
-            <Link
+            <LocaleLink
               key={item.to}
               to={item.to}
               onClick={() => setOpen(false)}
               className="font-serif text-3xl text-cream hover:text-gold"
             >
-              {item.label}
-            </Link>
+              {t(item.labelKey)}
+            </LocaleLink>
           ))}
-          <Link
+          <LocaleLink
             to={orderCTA.to}
             onClick={() => setOpen(false)}
             className="mt-4 border border-gold text-gold px-8 py-3 font-sans text-sm uppercase tracking-[0.2em] hover:bg-gold hover:text-black-ink"
           >
-            {orderCTA.label}
-          </Link>
+            {t(orderCTA.labelKey)}
+          </LocaleLink>
+          <LanguageSwitcher />
         </nav>
       </div>
     </>

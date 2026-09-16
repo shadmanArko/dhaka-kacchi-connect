@@ -1,16 +1,19 @@
+import { useTranslation } from "react-i18next";
 import { Reveal } from "@/components/ui/Reveal";
 import { Eyebrow, SectionTitle } from "@/components/ui/Typography";
-import { products } from "@/content/products";
+import { getProducts } from "@/content/products";
 
 export function ProductGrid() {
+  const { t } = useTranslation();
+  const products = getProducts(t);
   return (
     <section className="border-t border-line bg-black-ink py-24 md:py-32 px-6 md:px-14">
       <Reveal className="max-w-[700px] mx-auto text-center mb-16 md:mb-20">
-        <Eyebrow>What We Serve in Berlin</Eyebrow>
+        <Eyebrow>{t("product.sectionEyebrow")}</Eyebrow>
         <SectionTitle>
-          Two dishes.
+          {t("product.sectionTitleLine1")}
           <br />
-          <em>Both legendary.</em>
+          <em>{t("product.sectionTitleEm")}</em>
         </SectionTitle>
       </Reveal>
 

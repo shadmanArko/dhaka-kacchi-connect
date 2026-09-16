@@ -9,6 +9,7 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 
 import appCss from "../styles.css?url";
 import { SiteHeader } from "@/components/layout/SiteHeader";
@@ -18,22 +19,52 @@ import { ConsentBanner } from "@/components/ConsentBanner";
 import { SessionProvider } from "@/hooks/useSession";
 import { initAnalytics, trackPageview } from "@/lib/analytics";
 import { SITE_URL } from "@/lib/seo";
+import i18n, { DEFAULT_LOCALE, localeDir, type Locale } from "@/lib/i18n";
+
+/** Every route's URL is the single source of truth for which language is
+ * shown. This used to be synced from beforeLoad, which seemed right (it
+ * runs before render, both during SSR for the first request and on every
+ * client navigation) - but beforeLoad ALSO runs for a route the router is
+ * only speculatively preloading (Link's default hover/viewport preload),
+ * with a `preload: true` flag on its context. Confirmed live: hovering the
+ * "DE" switcher on the English homepage re-rendered the whole page in
+ * German with the URL still on "/", because i18next is one shared instance
+ * and every mounted useTranslation() consumer reacts to changeLanguage()
+ * regardless of which route asked for it. Guarding on `!preload` in
+ * beforeLoad wasn't enough either: TanStack Router can reuse a preloaded
+ * match's beforeLoad result for the real navigation that follows it, so
+ * skipping the preload's call also silently skipped the real one.
+ *
+ * The fix: don't drive this from beforeLoad at all. `useLocation()` only
+ * ever reflects the router's actual, committed location - never a
+ * speculative preload - so RootShell (below) reads it directly and
+ * resyncs i18next synchronously at the top of render, before any child
+ * calls t(). That covers SSR (the "current" location IS the request) and
+ * every real client-side navigation, without the preload false positive. */
+function localeFromPathname(pathname: string): Locale {
+  return pathname === "/de" || pathname.startsWith("/de/") ? "de" : DEFAULT_LOCALE;
+}
+
+function syncLocale(pathname: string): Locale {
+  const locale = localeFromPathname(pathname);
+  if (i18n.language !== locale) void i18n.changeLanguage(locale);
+  return locale;
+}
 
 function NotFoundComponent() {
+  const { t } = useTranslation();
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
         <h1 className="font-serif text-7xl text-gold">404</h1>
-        <h2 className="mt-4 font-serif text-xl text-cream">Page not found</h2>
-        <p className="mt-2 text-sm text-muted-warm">
-          The page you're looking for doesn't exist or has been moved.
-        </p>
+        <h2 className="mt-4 font-serif text-xl text-cream">{t("common.notFoundTitle")}</h2>
+        <p className="mt-2 text-sm text-muted-warm">{t("common.notFoundBody")}</p>
         <div className="mt-6">
           <Link
             to="/"
             className="inline-flex items-center justify-center border border-gold px-6 py-3 text-sm uppercase tracking-[0.2em] text-gold hover:bg-gold hover:text-black-ink transition-colors"
           >
-            Go home
+            {t("common.goHome")}
           </Link>
         </div>
       </div>
@@ -44,14 +75,13 @@ function NotFoundComponent() {
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
+  const { t } = useTranslation();
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
-        <h1 className="font-serif text-xl text-cream">This page didn't load</h1>
-        <p className="mt-2 text-sm text-muted-warm">
-          Something went wrong on our end. You can try refreshing or head back home.
-        </p>
+        <h1 className="font-serif text-xl text-cream">{t("common.errorTitle")}</h1>
+        <p className="mt-2 text-sm text-muted-warm">{t("common.errorBody")}</p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
             onClick={() => {
@@ -60,13 +90,13 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
             }}
             className="border border-gold px-6 py-3 text-sm uppercase tracking-[0.2em] text-gold hover:bg-gold hover:text-black-ink transition-colors"
           >
-            Try again
+            {t("common.tryAgain")}
           </button>
           <a
             href="/"
             className="border border-line px-6 py-3 text-sm uppercase tracking-[0.2em] text-cream hover:border-gold hover:text-gold transition-colors"
           >
-            Go home
+            {t("common.goHome")}
           </a>
         </div>
       </div>
@@ -144,8 +174,16 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 });
 
 function RootShell({ children }: { children: ReactNode }) {
+  // useLocation() is the router's real, committed location - unlike
+  // beforeLoad, it is never called for a speculative preload of some other
+  // route (see the long comment above syncLocale()). Runs before
+  // RootComponent's own body (React evaluates a parent's statements before
+  // descending into its children), so every t() call below this point in
+  // the tree already sees the right language, on the server and client.
+  const { pathname } = useLocation();
+  const locale = syncLocale(pathname);
   return (
-    <html lang="en">
+    <html lang={locale} dir={localeDir(locale)}>
       <head>
         <HeadContent />
       </head>
@@ -193,6 +231,7 @@ function Analytics() {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const { pathname } = useLocation();
+  const { t } = useTranslation();
   const isAdminRoute = pathname.startsWith("/admin");
 
   return (
@@ -208,7 +247,7 @@ function RootComponent() {
               href="#main"
               className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:bg-gold focus:px-6 focus:py-3 focus:font-sans focus:text-[0.78rem] focus:uppercase focus:tracking-[0.2em] focus:text-black-ink"
             >
-              Skip to content
+              {t("common.skipToContent")}
             </a>
             <SiteHeader />
             <FloatingSocial />

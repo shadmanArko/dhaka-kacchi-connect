@@ -1,8 +1,11 @@
+import { useTranslation } from "react-i18next";
 import { Reveal } from "@/components/ui/Reveal";
-import { specs } from "@/content/timeline";
+import { getSpecs } from "@/content/timeline";
 import kacchi from "@/assets/kacchi.jpg";
 
 export function FoodSpotlight() {
+  const { t } = useTranslation();
+  const specs = getSpecs(t);
   return (
     <section className="border-t border-line bg-deep">
       <div className="relative h-[70vh] min-h-[480px] overflow-hidden flex items-center justify-center">
@@ -23,17 +26,16 @@ export function FoodSpotlight() {
         />
         <Reveal className="relative z-[2] w-full text-center px-8">
           <span className="block mb-5 font-sans text-[0.68rem] uppercase tracking-[0.4em] text-gold">
-            Taste that hits your heart
+            {t("spotlight.eyebrow")}
           </span>
           <h2 className="font-serif font-light text-cream leading-none text-[clamp(2.5rem,7vw,5.5rem)] mb-5">
-            Kacchi. <em className="not-italic italic text-gold">Borhani.</em>
+            {t("spotlight.titleLine1")}{" "}
+            <em className="not-italic italic text-gold">{t("spotlight.titleEm")}</em>
             <br />
-            Berlin.
+            {t("spotlight.titleLine2")}
           </h2>
           <p className="max-w-[580px] mx-auto font-sans text-[0.97rem] leading-[1.95] text-cream/70">
-            Tender mutton. Fragrant basmati. A symphony of Bengali spices. Sealed and slow-cooked
-            until every grain of rice carries the soul of the dish. Paired with ice-cold Borhani.
-            Now in Berlin.
+            {t("spotlight.body")}
           </p>
         </Reveal>
       </div>

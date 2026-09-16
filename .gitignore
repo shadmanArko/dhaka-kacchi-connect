@@ -21,6 +21,10 @@ dist-static
 .wrangler/
 .dev.vars
 
+# Generated from src/locales/translations.csv by scripts/i18n/build-locales.mjs
+# - build artifact, not source. Run `npm run i18n:build` after cloning.
+src/locales/generated/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

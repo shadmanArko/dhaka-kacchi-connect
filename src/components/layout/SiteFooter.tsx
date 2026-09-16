@@ -1,27 +1,29 @@
-import { Link } from "@tanstack/react-router";
+import { useTranslation } from "react-i18next";
 import { site } from "@/content/site";
+import { LocaleLink } from "@/components/layout/LocaleLink";
 import { buildWaLink } from "@/lib/whatsapp";
 import logo from "@/assets/logo-nav.png";
 
 export function SiteFooter() {
+  const { t } = useTranslation();
   return (
     <footer className="grid grid-cols-1 md:grid-cols-3 items-center gap-6 border-t border-line bg-deep px-6 md:px-14 py-14 text-center md:text-left">
       <div className="flex justify-center md:justify-start">
-        <Link to="/" aria-label={`${site.name} — Home`}>
+        <LocaleLink to="/" aria-label={`${site.name} — Home`}>
           <img
             src={logo}
             alt={site.name}
             className="h-14 w-auto object-contain opacity-85 hover:opacity-100 transition-opacity"
             style={{ filter: "invert(1) sepia(1) saturate(2) hue-rotate(5deg) brightness(1.1)" }}
           />
-        </Link>
+        </LocaleLink>
       </div>
 
       <div className="font-sans text-[0.76rem] leading-[1.8] text-muted-warm text-center">
-        Authentic Kacchi &amp; Borhani — {site.location}
+        {t("footer.tagline", { location: t("footer.location") })}
         <br />
         <span className="text-surface-foreground/60">
-          © {new Date().getFullYear()} {site.name} · All rights reserved
+          © {new Date().getFullYear()} {site.name} · {t("footer.rights")}
         </span>
       </div>
 
@@ -39,14 +41,19 @@ export function SiteFooter() {
           rel="noopener noreferrer"
           className="text-gold no-underline hover:underline"
         >
-          WhatsApp us
+          {t("footer.whatsapp")}
         </a>
         <br />
-        <span>{site.website} · Berlin</span>
+        <span>
+          {site.website} · {t("footer.berlin")}
+        </span>
         <br />
-        <Link to="/privacy" className="text-surface-foreground/60 no-underline hover:underline">
-          Privacy Policy
-        </Link>
+        <LocaleLink
+          to="/privacy"
+          className="text-surface-foreground/60 no-underline hover:underline"
+        >
+          {t("footer.privacy")}
+        </LocaleLink>
       </div>
     </footer>
   );

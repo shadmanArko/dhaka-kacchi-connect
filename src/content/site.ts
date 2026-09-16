@@ -18,11 +18,14 @@ export const site = {
   },
 } as const;
 
+// `labelKey` is looked up via t() at render time (see SiteHeader) - kept as
+// a key here, not the English label, so this file doesn't need touching
+// when a translation changes.
 export const nav = [
-  { label: "Home", to: "/" as const },
-  { label: "About", to: "/about" as const },
-  { label: "History", to: "/history" as const },
-  { label: "Subscribe", to: "/subscribe" as const },
+  { labelKey: "nav.home", to: "/" as const },
+  { labelKey: "nav.about", to: "/about" as const },
+  { labelKey: "nav.history", to: "/history" as const },
+  { labelKey: "nav.subscribe", to: "/subscribe" as const },
 ] as const;
 
-export const orderCTA = { label: "Order Now", to: "/order" as const };
+export const orderCTA = { labelKey: "nav.orderNow", to: "/order" as const };
