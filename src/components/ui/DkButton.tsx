@@ -4,6 +4,7 @@ import {
   type ButtonHTMLAttributes,
   type ReactNode,
 } from "react";
+import { createLink } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
 
 const base =
@@ -32,6 +33,30 @@ export const AnchorButton = forwardRef<HTMLAnchorElement, LinkProps>(
   ),
 );
 AnchorButton.displayName = "AnchorButton";
+
+/**
+ * AnchorButton with client-side routing - use this for INTERNAL destinations
+ * and plain AnchorButton for external ones (WhatsApp, Instagram, mailto).
+ *
+ * It exists because the obvious composition is invalid HTML. Wrapping
+ * `<AnchorButton href="/order">` in `<Link to="/order">` renders an `<a>`
+ * inside an `<a>`, which no browser will parse as written: the parser closes
+ * the outer anchor early, so the DOM built from our prerendered HTML does not
+ * match the tree React expects and hydration fails outright (React #418 -
+ * "Hydration failed because the server rendered HTML didn't match the
+ * client"). That fired on every homepage load, and React's recovery is to
+ * throw away the server markup for that subtree and re-render it on the
+ * client, which quietly gives back part of what prerendering is for.
+ *
+ * createLink is TanStack Router's supported way to make an existing
+ * anchor-like component routable. AnchorButton already forwards its ref and
+ * spreads the rest onto the `<a>`, which is exactly the contract createLink
+ * needs, so the result is ONE anchor carrying both the styling and the
+ * router's navigation handlers.
+ *
+ * Takes `to` (typed against the route tree), not `href`.
+ */
+export const ButtonLink = createLink(AnchorButton);
 
 export const Button = forwardRef<HTMLButtonElement, BtnProps>(
   ({ variant = "gold", className, children, ...rest }, ref) => (

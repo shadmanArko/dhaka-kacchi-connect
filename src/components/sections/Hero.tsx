@@ -1,6 +1,5 @@
-import { Link } from "@tanstack/react-router";
 import { MapPin } from "lucide-react";
-import { AnchorButton } from "@/components/ui/DkButton";
+import { ButtonLink } from "@/components/ui/DkButton";
 import { Rings } from "@/components/ui/Rings";
 import { Tag } from "@/components/ui/Typography";
 import kacchi from "@/assets/kacchi.jpg";
@@ -42,17 +41,13 @@ export function Hero() {
         </div>
 
         <div className="animate-fade-up opacity-0 [animation-delay:1.3s] flex flex-wrap gap-4">
-          <Link to="/order" className="contents">
-            <AnchorButton href="/order" variant="gold">
-              <span>Order Now</span>
-              <span aria-hidden>→</span>
-            </AnchorButton>
-          </Link>
-          <Link to="/about" className="contents">
-            <AnchorButton href="/about" variant="ghost">
-              <span>Our Story</span>
-            </AnchorButton>
-          </Link>
+          <ButtonLink to="/order" variant="gold">
+            <span>Order Now</span>
+            <span aria-hidden>→</span>
+          </ButtonLink>
+          <ButtonLink to="/about" variant="ghost">
+            <span>Our Story</span>
+          </ButtonLink>
         </div>
       </div>
 
