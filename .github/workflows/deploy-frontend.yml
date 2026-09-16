@@ -15,6 +15,15 @@ on:
       - "package.json"
       - "bun.lock"
       - "bunfig.toml"
+      # This workflow watches ITSELF. Without this line a change to the
+      # deploy pipeline pushes silently and validates nothing - it just sits
+      # dormant until some unrelated src/ change happens to exercise it,
+      # which is how a broken deploy gets discovered at the worst moment.
+      # That is not hypothetical: the Node 20 action bumps landed with no
+      # run at all and had to be triggered by hand to find out they worked.
+      # Re-running this on a pipeline change is close to free - the site
+      # content is unchanged, so it re-uploads an identical tree.
+      - ".github/workflows/deploy-frontend.yml"
   workflow_dispatch:
 
 concurrency:

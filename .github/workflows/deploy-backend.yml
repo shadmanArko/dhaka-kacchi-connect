@@ -7,6 +7,14 @@ on:
     branches: [main]
     paths:
       - "worker/**"
+      # Mirrors deploy-frontend.yml: this workflow watches itself, so a
+      # change to the deploy pipeline is exercised by that same push rather
+      # than lying dormant until the next unrelated worker/ change.
+      # Note the asymmetry with the frontend - this one rebuilds and
+      # restarts the container, so a pipeline edit costs a few seconds of
+      # API downtime. That is the right trade: an untested deploy path is
+      # far more expensive than a blip on a weekday.
+      - ".github/workflows/deploy-backend.yml"
   workflow_dispatch:
 
 concurrency:
