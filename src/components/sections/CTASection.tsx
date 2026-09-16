@@ -1,7 +1,7 @@
 import { type ReactNode } from "react";
 import { Reveal } from "@/components/ui/Reveal";
 import { Eyebrow } from "@/components/ui/Typography";
-import { ButtonLink } from "@/components/ui/DkButton";
+import { LocaleButtonLink } from "@/components/layout/LocaleLink";
 
 type Props = {
   eyebrow: string;
@@ -21,10 +21,10 @@ export function CTASection({ eyebrow, title, body, ctaLabel, ctaTo, footnote }: 
           {title}
         </h2>
         <p className="font-sans text-[0.95rem] leading-[1.85] text-muted-warm mb-12">{body}</p>
-        <ButtonLink to={ctaTo} variant="gold">
+        <LocaleButtonLink to={ctaTo} variant="gold">
           <span>{ctaLabel}</span>
           <span aria-hidden>→</span>
-        </ButtonLink>
+        </LocaleButtonLink>
         {footnote && (
           <p className="mt-9 font-sans text-[0.7rem] uppercase tracking-[0.3em] text-muted-warm">
             {footnote}

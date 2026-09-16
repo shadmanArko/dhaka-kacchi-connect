@@ -15,6 +15,10 @@
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": false,
     "noEmit": true,
+    /* src/lib/i18n.ts imports the CSV-generated src/locales/generated/*.json
+       resource bundles directly (see scripts/i18n/build-locales.mjs) -
+       needs `npm run i18n:build` to have run first, same as dev/build/test. */
+    "resolveJsonModule": true,
 
     /* Linting */
     "skipLibCheck": true,

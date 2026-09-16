@@ -18,8 +18,15 @@ import { Route as HistoryRouteImport } from './routes/history'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminLayoutRouteImport } from './routes/admin/_layout'
+import { Route as LocaleLayoutRouteImport } from './routes/$locale/_layout'
 import { Route as AdminLayoutIndexRouteImport } from './routes/admin/_layout.index'
+import { Route as LocaleLayoutIndexRouteImport } from './routes/$locale/_layout.index'
 import { Route as AdminLayoutLoginRouteImport } from './routes/admin/_layout.login'
+import { Route as LocaleLayoutSubscribeRouteImport } from './routes/$locale/_layout.subscribe'
+import { Route as LocaleLayoutPrivacyRouteImport } from './routes/$locale/_layout.privacy'
+import { Route as LocaleLayoutOrderRouteImport } from './routes/$locale/_layout.order'
+import { Route as LocaleLayoutHistoryRouteImport } from './routes/$locale/_layout.history'
+import { Route as LocaleLayoutAboutRouteImport } from './routes/$locale/_layout.about'
 import { Route as AdminLayoutOrdersNewRouteImport } from './routes/admin/_layout.orders.new'
 
 const SubscribeRoute = SubscribeRouteImport.update({
@@ -67,15 +74,50 @@ const AdminLayoutRoute = AdminLayoutRouteImport.update({
   path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LocaleLayoutRoute = LocaleLayoutRouteImport.update({
+  id: '/$locale/_layout',
+  path: '/$locale',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminLayoutIndexRoute = AdminLayoutIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AdminLayoutRoute,
 } as any)
+const LocaleLayoutIndexRoute = LocaleLayoutIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => LocaleLayoutRoute,
+} as any)
 const AdminLayoutLoginRoute = AdminLayoutLoginRouteImport.update({
   id: '/login',
   path: '/login',
   getParentRoute: () => AdminLayoutRoute,
+} as any)
+const LocaleLayoutSubscribeRoute = LocaleLayoutSubscribeRouteImport.update({
+  id: '/subscribe',
+  path: '/subscribe',
+  getParentRoute: () => LocaleLayoutRoute,
+} as any)
+const LocaleLayoutPrivacyRoute = LocaleLayoutPrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
+  getParentRoute: () => LocaleLayoutRoute,
+} as any)
+const LocaleLayoutOrderRoute = LocaleLayoutOrderRouteImport.update({
+  id: '/order',
+  path: '/order',
+  getParentRoute: () => LocaleLayoutRoute,
+} as any)
+const LocaleLayoutHistoryRoute = LocaleLayoutHistoryRouteImport.update({
+  id: '/history',
+  path: '/history',
+  getParentRoute: () => LocaleLayoutRoute,
+} as any)
+const LocaleLayoutAboutRoute = LocaleLayoutAboutRouteImport.update({
+  id: '/about',
+  path: '/about',
+  getParentRoute: () => LocaleLayoutRoute,
 } as any)
 const AdminLayoutOrdersNewRoute = AdminLayoutOrdersNewRouteImport.update({
   id: '/orders/new',
@@ -92,8 +134,15 @@ export interface FileRoutesByFullPath {
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/subscribe': typeof SubscribeRoute
+  '/$locale': typeof LocaleLayoutRouteWithChildren
   '/admin': typeof AdminLayoutRouteWithChildren
+  '/$locale/about': typeof LocaleLayoutAboutRoute
+  '/$locale/history': typeof LocaleLayoutHistoryRoute
+  '/$locale/order': typeof LocaleLayoutOrderRoute
+  '/$locale/privacy': typeof LocaleLayoutPrivacyRoute
+  '/$locale/subscribe': typeof LocaleLayoutSubscribeRoute
   '/admin/login': typeof AdminLayoutLoginRoute
+  '/$locale/': typeof LocaleLayoutIndexRoute
   '/admin/': typeof AdminLayoutIndexRoute
   '/admin/orders/new': typeof AdminLayoutOrdersNewRoute
 }
@@ -106,7 +155,13 @@ export interface FileRoutesByTo {
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/subscribe': typeof SubscribeRoute
+  '/$locale/about': typeof LocaleLayoutAboutRoute
+  '/$locale/history': typeof LocaleLayoutHistoryRoute
+  '/$locale/order': typeof LocaleLayoutOrderRoute
+  '/$locale/privacy': typeof LocaleLayoutPrivacyRoute
+  '/$locale/subscribe': typeof LocaleLayoutSubscribeRoute
   '/admin/login': typeof AdminLayoutLoginRoute
+  '/$locale': typeof LocaleLayoutIndexRoute
   '/admin': typeof AdminLayoutIndexRoute
   '/admin/orders/new': typeof AdminLayoutOrdersNewRoute
 }
@@ -120,8 +175,15 @@ export interface FileRoutesById {
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/subscribe': typeof SubscribeRoute
+  '/$locale/_layout': typeof LocaleLayoutRouteWithChildren
   '/admin/_layout': typeof AdminLayoutRouteWithChildren
+  '/$locale/_layout/about': typeof LocaleLayoutAboutRoute
+  '/$locale/_layout/history': typeof LocaleLayoutHistoryRoute
+  '/$locale/_layout/order': typeof LocaleLayoutOrderRoute
+  '/$locale/_layout/privacy': typeof LocaleLayoutPrivacyRoute
+  '/$locale/_layout/subscribe': typeof LocaleLayoutSubscribeRoute
   '/admin/_layout/login': typeof AdminLayoutLoginRoute
+  '/$locale/_layout/': typeof LocaleLayoutIndexRoute
   '/admin/_layout/': typeof AdminLayoutIndexRoute
   '/admin/_layout/orders/new': typeof AdminLayoutOrdersNewRoute
 }
@@ -136,8 +198,15 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/reset-password'
     | '/subscribe'
+    | '/$locale'
     | '/admin'
+    | '/$locale/about'
+    | '/$locale/history'
+    | '/$locale/order'
+    | '/$locale/privacy'
+    | '/$locale/subscribe'
     | '/admin/login'
+    | '/$locale/'
     | '/admin/'
     | '/admin/orders/new'
   fileRoutesByTo: FileRoutesByTo
@@ -150,7 +219,13 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/reset-password'
     | '/subscribe'
+    | '/$locale/about'
+    | '/$locale/history'
+    | '/$locale/order'
+    | '/$locale/privacy'
+    | '/$locale/subscribe'
     | '/admin/login'
+    | '/$locale'
     | '/admin'
     | '/admin/orders/new'
   id:
@@ -163,8 +238,15 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/reset-password'
     | '/subscribe'
+    | '/$locale/_layout'
     | '/admin/_layout'
+    | '/$locale/_layout/about'
+    | '/$locale/_layout/history'
+    | '/$locale/_layout/order'
+    | '/$locale/_layout/privacy'
+    | '/$locale/_layout/subscribe'
     | '/admin/_layout/login'
+    | '/$locale/_layout/'
     | '/admin/_layout/'
     | '/admin/_layout/orders/new'
   fileRoutesById: FileRoutesById
@@ -178,6 +260,7 @@ export interface RootRouteChildren {
   PrivacyRoute: typeof PrivacyRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SubscribeRoute: typeof SubscribeRoute
+  LocaleLayoutRoute: typeof LocaleLayoutRouteWithChildren
   AdminLayoutRoute: typeof AdminLayoutRouteWithChildren
 }
 
@@ -246,6 +329,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminLayoutRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/$locale/_layout': {
+      id: '/$locale/_layout'
+      path: '/$locale'
+      fullPath: '/$locale'
+      preLoaderRoute: typeof LocaleLayoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/_layout/': {
       id: '/admin/_layout/'
       path: '/'
@@ -253,12 +343,54 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminLayoutIndexRouteImport
       parentRoute: typeof AdminLayoutRoute
     }
+    '/$locale/_layout/': {
+      id: '/$locale/_layout/'
+      path: '/'
+      fullPath: '/$locale/'
+      preLoaderRoute: typeof LocaleLayoutIndexRouteImport
+      parentRoute: typeof LocaleLayoutRoute
+    }
     '/admin/_layout/login': {
       id: '/admin/_layout/login'
       path: '/login'
       fullPath: '/admin/login'
       preLoaderRoute: typeof AdminLayoutLoginRouteImport
       parentRoute: typeof AdminLayoutRoute
+    }
+    '/$locale/_layout/subscribe': {
+      id: '/$locale/_layout/subscribe'
+      path: '/subscribe'
+      fullPath: '/$locale/subscribe'
+      preLoaderRoute: typeof LocaleLayoutSubscribeRouteImport
+      parentRoute: typeof LocaleLayoutRoute
+    }
+    '/$locale/_layout/privacy': {
+      id: '/$locale/_layout/privacy'
+      path: '/privacy'
+      fullPath: '/$locale/privacy'
+      preLoaderRoute: typeof LocaleLayoutPrivacyRouteImport
+      parentRoute: typeof LocaleLayoutRoute
+    }
+    '/$locale/_layout/order': {
+      id: '/$locale/_layout/order'
+      path: '/order'
+      fullPath: '/$locale/order'
+      preLoaderRoute: typeof LocaleLayoutOrderRouteImport
+      parentRoute: typeof LocaleLayoutRoute
+    }
+    '/$locale/_layout/history': {
+      id: '/$locale/_layout/history'
+      path: '/history'
+      fullPath: '/$locale/history'
+      preLoaderRoute: typeof LocaleLayoutHistoryRouteImport
+      parentRoute: typeof LocaleLayoutRoute
+    }
+    '/$locale/_layout/about': {
+      id: '/$locale/_layout/about'
+      path: '/about'
+      fullPath: '/$locale/about'
+      preLoaderRoute: typeof LocaleLayoutAboutRouteImport
+      parentRoute: typeof LocaleLayoutRoute
     }
     '/admin/_layout/orders/new': {
       id: '/admin/_layout/orders/new'
@@ -269,6 +401,28 @@ declare module '@tanstack/react-router' {
     }
   }
 }
+
+interface LocaleLayoutRouteChildren {
+  LocaleLayoutAboutRoute: typeof LocaleLayoutAboutRoute
+  LocaleLayoutHistoryRoute: typeof LocaleLayoutHistoryRoute
+  LocaleLayoutOrderRoute: typeof LocaleLayoutOrderRoute
+  LocaleLayoutPrivacyRoute: typeof LocaleLayoutPrivacyRoute
+  LocaleLayoutSubscribeRoute: typeof LocaleLayoutSubscribeRoute
+  LocaleLayoutIndexRoute: typeof LocaleLayoutIndexRoute
+}
+
+const LocaleLayoutRouteChildren: LocaleLayoutRouteChildren = {
+  LocaleLayoutAboutRoute: LocaleLayoutAboutRoute,
+  LocaleLayoutHistoryRoute: LocaleLayoutHistoryRoute,
+  LocaleLayoutOrderRoute: LocaleLayoutOrderRoute,
+  LocaleLayoutPrivacyRoute: LocaleLayoutPrivacyRoute,
+  LocaleLayoutSubscribeRoute: LocaleLayoutSubscribeRoute,
+  LocaleLayoutIndexRoute: LocaleLayoutIndexRoute,
+}
+
+const LocaleLayoutRouteWithChildren = LocaleLayoutRoute._addFileChildren(
+  LocaleLayoutRouteChildren,
+)
 
 interface AdminLayoutRouteChildren {
   AdminLayoutLoginRoute: typeof AdminLayoutLoginRoute
@@ -295,6 +449,7 @@ const rootRouteChildren: RootRouteChildren = {
   PrivacyRoute: PrivacyRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SubscribeRoute: SubscribeRoute,
+  LocaleLayoutRoute: LocaleLayoutRouteWithChildren,
   AdminLayoutRoute: AdminLayoutRouteWithChildren,
 }
 export const routeTree = rootRouteImport

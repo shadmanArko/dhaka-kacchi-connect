@@ -8,6 +8,8 @@
  * (or later moving endpoints into TanStack `createServerFn`) is a one-file change.
  */
 
+import i18n from "@/lib/i18n";
+
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 
 /** Plain DB reads. Long enough for a cold backend, short enough that a dead
@@ -43,13 +45,13 @@ export type ApiFetchOptions = {
 };
 
 function statusMessage(status: number): string {
-  if (status === 401) return "Your session has expired. Please log in again.";
-  if (status === 403) return "You don't have access to that.";
-  if (status === 404) return "We couldn't find that.";
-  if (status === 409) return "That conflicts with something that already exists.";
-  if (status === 429) return "Too many attempts. Please wait a moment and try again.";
-  if (status >= 400 && status < 500) return "That didn't look right. Please check and try again.";
-  return "Something went wrong on our end. Please try again in a moment.";
+  if (status === 401) return i18n.t("api.error.401");
+  if (status === 403) return i18n.t("api.error.403");
+  if (status === 404) return i18n.t("api.error.404");
+  if (status === 409) return i18n.t("api.error.409");
+  if (status === 429) return i18n.t("api.error.429");
+  if (status >= 400 && status < 500) return i18n.t("api.error.4xx");
+  return i18n.t("api.error.generic");
 }
 
 /** The worker answers every error as { error: <machine_code>, message: <human
@@ -100,17 +102,13 @@ export async function apiFetch<T>(
     });
   } catch (err) {
     if (timedOut) {
-      throw new ApiError(
-        0,
-        "That took too long. Please check your connection and try again.",
-        "timeout",
-      );
+      throw new ApiError(0, i18n.t("api.error.timeout"), "timeout");
     }
     // A caller-initiated cancel is not an error condition - propagate as-is.
     if (init?.signal?.aborted) throw err;
     throw new ApiError(
       0,
-      "Couldn't reach the server. Please check your connection and try again.",
+      i18n.t("api.error.network"),
       "network",
       err instanceof Error ? err.message : undefined,
     );

@@ -1,15 +1,18 @@
+import { useTranslation } from "react-i18next";
 import { Reveal } from "@/components/ui/Reveal";
 import { Eyebrow, SectionTitle } from "@/components/ui/Typography";
-import { timeline } from "@/content/timeline";
+import { getTimeline } from "@/content/timeline";
 
 export function Timeline() {
+  const { t } = useTranslation();
+  const timeline = getTimeline(t);
   return (
     <section className="border-t border-line bg-black-ink py-24 md:py-32 px-6 md:px-14">
       <div className="max-w-[900px] mx-auto">
         <Reveal className="mb-16 md:mb-20">
-          <Eyebrow>How to Order in Berlin</Eyebrow>
+          <Eyebrow>{t("timeline.eyebrow")}</Eyebrow>
           <SectionTitle>
-            Simple as <em>one message.</em>
+            {t("timeline.titlePre")} <em>{t("timeline.titleEm")}</em>
           </SectionTitle>
         </Reveal>
 

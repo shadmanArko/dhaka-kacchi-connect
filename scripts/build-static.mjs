@@ -18,6 +18,10 @@ import path from "node:path";
 // below catches a forgotten entry at build time instead of a silent
 // production 404 (which is exactly how /privacy went live 404ing for a
 // while - it existed as a real route and just never made it into this list).
+// Every English route this app has, plus the translated pages again under
+// each of TRANSLATED_ROUTES.map(route => `/${locale}${route}`) below - kept
+// as one flat list (not routes × locales nested) so checkRoutesComplete()
+// below can still diff it directly against routeTree.gen.ts's full path set.
 const ROUTES = [
   "/",
   "/about",
@@ -28,17 +32,31 @@ const ROUTES = [
   "/privacy",
   // Signed-in-only, but still a real static path that must exist on the host -
   // the gate is client-side (see the route's own comment), so the HTML has to
-  // be there for the redirect to be able to run at all.
+  // be there for the redirect to be able to run at all. Not localized - a
+  // customer's own order history isn't marketing copy, and translating it
+  // would need its own scoping pass.
   "/orders",
   // Admin panel - all three are static/enumerable paths (no dynamic
   // segment). Order detail/discount/status editing is deliberately a
   // panel on /admin driven by a `?order=` search param, not its own
   // /admin/orders/$id route - this static host has no SPA-fallback
   // rewrite configured, so a dynamic path segment can't be reliably
-  // deep-linked/hard-refreshed (see routes/admin/_layout.tsx).
+  // deep-linked/hard-refreshed (see routes/admin/_layout.tsx). English-only
+  // per Arko's own instruction - the admin panel is his tool, not a
+  // customer-facing page.
   "/admin",
   "/admin/login",
   "/admin/orders/new",
+  // Every locale in src/lib/i18n.ts's SUPPORTED_LOCALES, prefixed onto the
+  // subset of ROUTES above that's actually translated (src/routes/$locale/
+  // has one file per entry here - see that directory for the full list).
+  // Adding a language later is: add it to SUPPORTED_LOCALES, add its column
+  // to src/locales/translations.csv, and this array grows on its own.
+  ...["de"].flatMap((locale) =>
+    ["/", "/about", "/history", "/order", "/subscribe", "/privacy"].map((route) =>
+      route === "/" ? `/${locale}` : `/${locale}${route}`,
+    ),
+  ),
 ];
 
 const PORT = 4173;

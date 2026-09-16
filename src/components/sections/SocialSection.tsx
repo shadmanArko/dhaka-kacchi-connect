@@ -1,20 +1,22 @@
 import { Facebook, Instagram } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Reveal } from "@/components/ui/Reveal";
 import { Eyebrow } from "@/components/ui/Typography";
 import { site } from "@/content/site";
 
 export function SocialSection() {
+  const { t } = useTranslation();
   return (
     <section className="border-t border-line bg-deep py-20 px-6 md:px-14 text-center">
       <Reveal className="max-w-[900px] mx-auto">
-        <Eyebrow>Stay Connected</Eyebrow>
+        <Eyebrow>{t("social.eyebrow")}</Eyebrow>
         <h2 className="font-serif font-light text-cream text-[clamp(2rem,4vw,3rem)] leading-[1.15] mb-3.5 [&_em]:not-italic [&_em]:italic [&_em]:text-gold">
-          Follow our <em>journey</em>
+          {t("social.titlePre")} <em>{t("social.titleEm")}</em>
         </h2>
         <p className="font-sans text-[0.94rem] leading-[1.85] text-muted-warm mb-12">
-          Behind every plate is a story. See the cooking, the chaos, the joy.
+          {t("social.bodyLine1")}
           <br />
-          Follow Dhaka Kacchi and never miss a batch.
+          {t("social.bodyLine2")}
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 max-w-[680px] mx-auto">
@@ -35,7 +37,7 @@ export function SocialSection() {
                 Facebook
               </strong>
               <span className="font-sans text-[0.7rem] uppercase tracking-[0.15em] text-muted-warm group-hover:text-white/90">
-                Like our page →
+                {t("social.facebookLike")}
               </span>
             </div>
           </a>
@@ -57,7 +59,7 @@ export function SocialSection() {
                 Instagram
               </strong>
               <span className="font-sans text-[0.7rem] uppercase tracking-[0.15em] text-muted-warm group-hover:text-white/90">
-                Follow us →
+                {t("social.instagramFollow")}
               </span>
             </div>
           </a>
