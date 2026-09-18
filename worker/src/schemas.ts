@@ -421,3 +421,21 @@ export const AdminStatusInputSchema = z
     status: OrderStatusSchema,
   })
   .openapi("AdminStatusInput");
+
+// Staff correcting an already-placed order - items and delivery details only.
+// Deliberately excludes customerName/existingCustomerId/newCustomer: this
+// endpoint never changes which customer an order belongs to, only what/when/
+// where it's for (see adminUpdateOrderRoute in index.ts for the "locked once
+// delivered/cancelled" rule this pairs with).
+export const AdminOrderUpdateInputSchema = z
+  .object({
+    items: z.array(OrderItemInputSchema).min(1),
+    deliveryDate: z
+      .string()
+      .openapi({ example: "2026-09-12", description: "YYYY-MM-DD, must be a valid Saturday" }),
+    fulfillmentType: z.enum(["pickup", "delivery"]),
+    address: DeliveryAddressSchema.optional().openapi({
+      description: "Required when fulfillmentType is 'delivery'",
+    }),
+  })
+  .openapi("AdminOrderUpdateInput");

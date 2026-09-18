@@ -315,6 +315,17 @@ export type AdminOrderInput = {
 
 export type AdminDiscountInput = { discountCents: number; discountReason?: string };
 
+// Staff correcting an already-placed order - items and delivery details
+// only, mirroring AdminOrderUpdateInputSchema on the backend. No
+// customerName/existingCustomerId/newCustomer: this call never changes which
+// customer an order belongs to.
+export type AdminOrderUpdateInput = {
+  items: OrderItemInput[];
+  deliveryDate: string;
+  fulfillmentType: "pickup" | "delivery";
+  address?: DeliveryAddressInput;
+};
+
 function buildQuery(params: Record<string, string | undefined>): string {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
@@ -467,5 +478,15 @@ export const adminApi = {
         body: JSON.stringify({ status }),
       },
       { timeoutMs: SIDE_EFFECT_TIMEOUT_MS }, // may fan out to email + Telegram
+    ),
+  updateOrder: (token: string, orderId: string, input: AdminOrderUpdateInput) =>
+    apiFetch<{ order: AdminOrder }>(
+      `/v1/admin/orders/${encodeURIComponent(orderId)}`,
+      {
+        method: "PATCH",
+        headers: authHeader(token),
+        body: JSON.stringify(input),
+      },
+      { timeoutMs: SIDE_EFFECT_TIMEOUT_MS }, // awaits update email + Telegram
     ),
 };

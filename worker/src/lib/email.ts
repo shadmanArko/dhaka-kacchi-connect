@@ -149,6 +149,55 @@ export async function sendDiscountAppliedEmail(order: OrderRecord): Promise<bool
   return true;
 }
 
+/**
+ * Sent when staff edit an already-placed order's items or delivery details
+ * via the admin panel - same "stale info left behind" gap
+ * sendDiscountAppliedEmail closes for a discount, extended to cover any
+ * item/date/address change. Shows the previous item summary alongside the
+ * new order so the customer can tell what changed, since unlike a discount
+ * this can change several things in one save. Best-effort like the other
+ * order emails; called directly from the admin update-order handler, not
+ * routed through orderEvents.ts (only one caller will ever trigger this).
+ */
+export async function sendOrderUpdatedEmail(
+  previous: OrderRecord,
+  updated: OrderRecord,
+): Promise<boolean> {
+  if (!config.hostingerSmtpHost || !config.hostingerSmtpUser || !config.hostingerSmtpPass) {
+    console.warn("Order-updated email not sent: HOSTINGER_SMTP_* is not configured.");
+    return false;
+  }
+
+  const previousItemLine = previous.items.map((i) => `${i.quantity}x ${i.name}`).join(", ");
+  const newItemLines = updated.items
+    .map((i) => `  - ${i.quantity}x ${i.name} (€${(i.unitPriceCents / 100).toFixed(2)} each)`)
+    .join("\n");
+
+  await getTransporter().sendMail({
+    from: `"Dhaka Kacchi Berlin" <${config.orderFromEmail}>`,
+    to: `"${updated.customerName}" <${updated.customerEmail}>`,
+    subject: `Your order was updated — Dhaka Kacchi Berlin`,
+    text: [
+      `Hi ${updated.customerName},`,
+      "",
+      "We've updated your order. It now is:",
+      newItemLines,
+      "",
+      `Total: €${(totalCents(updated) / 100).toFixed(2)} (cash on delivery)`,
+      fulfillmentLine(updated),
+      "",
+      `(was: ${previousItemLine})`,
+      "",
+      `Order reference: ${updated.id}`,
+      "",
+      "If anything looks wrong, just reply to this email.",
+      "Dhaka Kacchi Berlin",
+    ].join("\n"),
+  });
+
+  return true;
+}
+
 /** Wires email sending into the order-created event stream and records the
  * outcome on the order itself. Call once at startup. */
 export function registerEmailNotifications(repository: OrdersRepository): void {

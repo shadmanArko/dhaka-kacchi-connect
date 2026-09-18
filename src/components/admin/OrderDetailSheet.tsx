@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import { formatEuro, formatDate } from "@/lib/format";
 import { toast } from "sonner";
 import { adminApi, ApiError, type AdminOrder, type OrderStatus } from "@/lib/api";
+import { useOrderItemsDeliveryForm } from "@/hooks/useOrderItemsDeliveryForm";
+import { OrderItemQuantityList } from "@/components/admin/OrderItemQuantityList";
+import { DeliveryDetailsFields } from "@/components/admin/DeliveryDetailsFields";
 import {
   Sheet,
   SheetContent,
@@ -34,6 +37,114 @@ import {
 const DISCOUNT_PRESETS_CENTS = [200, 500, 1000];
 const STATUS_OPTIONS: OrderStatus[] = ["received", "confirmed", "delivered", "cancelled"];
 
+/**
+ * The items + delivery-details editor for an already-placed order. A
+ * separate component (not inline in OrderDetailSheet) so it can own its own
+ * useOrderItemsDeliveryForm instance, mounted fresh - via `key={order.id}`
+ * at the call site - every time editing starts or a different order opens,
+ * rather than trying to re-seed one long-lived hook instance by hand.
+ */
+function OrderEditPanel({
+  order,
+  token,
+  onSaved,
+  onCancel,
+}: {
+  order: AdminOrder;
+  token: string;
+  onSaved: (order: AdminOrder) => void;
+  onCancel: () => void;
+}) {
+  const form = useOrderItemsDeliveryForm({
+    quantities: Object.fromEntries(order.items.map((item) => [item.sku, item.quantity])),
+    deliveryDate: order.deliveryDate,
+    fulfillmentType: order.fulfillmentType,
+    street: order.address?.street ?? "",
+    houseNumber: order.address?.houseNumber ?? "",
+    postalCode: order.address?.postalCode ?? "",
+    city: order.address?.city ?? "Berlin",
+    knownDeliveryFeeCents: order.deliveryFeeCents,
+    knownDistanceKm: order.distanceKm,
+  });
+  const [saving, setSaving] = useState(false);
+
+  const canSave =
+    form.menuState === "ready" && form.itemCount > 0 && form.dateValid && form.fulfillmentReady;
+
+  async function save() {
+    if (!canSave) return;
+    setSaving(true);
+    try {
+      const result = await adminApi.updateOrder(token, order.id, {
+        items: form.itemsPayload(),
+        deliveryDate: form.deliveryDate,
+        fulfillmentType: form.fulfillmentType,
+        address: form.addressPayload(),
+      });
+      toast.success(`Order updated — new total ${formatEuro(result.order.totalCents)}`);
+      onSaved(result.order);
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Couldn't save the order.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <OrderItemQuantityList
+        menu={form.menu}
+        menuState={form.menuState}
+        quantities={form.quantities}
+        onQtyChange={form.setQty}
+        onRetry={form.retryMenu}
+      />
+
+      <DeliveryDetailsFields
+        idPrefix={`edit-${order.id}`}
+        deliveryDate={form.deliveryDate}
+        onDeliveryDateChange={form.setDeliveryDate}
+        dateValid={form.dateValid}
+        fulfillmentType={form.fulfillmentType}
+        onFulfillmentTypeChange={form.setFulfillmentType}
+        street={form.street}
+        onStreetChange={form.setStreet}
+        houseNumber={form.houseNumber}
+        onHouseNumberChange={form.setHouseNumber}
+        postalCode={form.postalCode}
+        onPostalCodeChange={form.setPostalCode}
+        city={form.city}
+        onCityChange={form.setCity}
+        quoteState={form.quoteState}
+        quote={form.quote}
+        quoteError={form.quoteError}
+      />
+
+      <div className="flex items-center justify-between border-t border-border pt-3 font-sans text-sm">
+        <span className="text-muted-foreground">
+          {form.itemCount} {form.itemCount === 1 ? "item" : "items"}
+        </span>
+        <strong className="text-base">{formatEuro(form.totalCents)}</strong>
+      </div>
+
+      <div className="flex gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          className="flex-1"
+          onClick={onCancel}
+          disabled={saving}
+        >
+          Cancel
+        </Button>
+        <Button type="button" className="flex-1" onClick={save} disabled={!canSave || saving}>
+          {saving ? "Saving…" : "Save changes"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function OrderDetailSheet({
   order,
   token,
@@ -50,14 +161,16 @@ export function OrderDetailSheet({
   const [savingDiscount, setSavingDiscount] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
+  const [editingItems, setEditingItems] = useState(false);
 
-  // Resets the discount form to the order's current (server-confirmed)
-  // discount every time a different order opens - never carries a stale
-  // draft from the previously-open order into this one.
+  // Resets the discount form (and exits item-editing) to match the order's
+  // current (server-confirmed) state every time a different order opens -
+  // never carries a stale draft from the previously-open order into this one.
   useEffect(() => {
     if (order) {
       setDiscountEuros(order.discountCents > 0 ? (order.discountCents / 100).toFixed(2) : "");
       setDiscountReason(order.discountReason ?? "");
+      setEditingItems(false);
     }
   }, [order?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -77,6 +190,11 @@ export function OrderDetailSheet({
     parsedDiscountCents < 0 ||
     parsedDiscountCents > maxDiscountCents;
   const isCancelled = order.status === "cancelled";
+  const isDelivered = order.status === "delivered";
+  // Once an order is delivered or cancelled it's locked - same rule the
+  // backend's adminUpdateOrderRoute enforces (400 order_locked), mirrored
+  // here so staff see a disabled control instead of a save that always fails.
+  const itemsLocked = isCancelled || isDelivered;
 
   // Saving an unchanged discount re-fires a real customer email AND a Telegram
   // message (the backend awaits both), so a fumbled second click spams the
@@ -181,15 +299,46 @@ export function OrderDetailSheet({
             </section>
 
             <section className="space-y-1 border-t border-border pt-4 font-sans text-sm">
-              {order.items.map((item) => (
-                <p key={item.sku}>
-                  {item.quantity}x {item.name} ({formatEuro(item.unitPriceCents)} each)
-                </p>
-              ))}
-              <p className="pt-2 text-muted-foreground">
-                Subtotal: {formatEuro(order.subtotalCents)}
-                {order.deliveryFeeCents > 0 && ` · Delivery: ${formatEuro(order.deliveryFeeCents)}`}
-              </p>
+              {editingItems ? (
+                <OrderEditPanel
+                  key={order.id}
+                  order={order}
+                  token={token}
+                  onSaved={(updated) => {
+                    onUpdated(updated);
+                    setEditingItems(false);
+                  }}
+                  onCancel={() => setEditingItems(false)}
+                />
+              ) : (
+                <>
+                  {order.items.map((item) => (
+                    <p key={item.sku}>
+                      {item.quantity}x {item.name} ({formatEuro(item.unitPriceCents)} each)
+                    </p>
+                  ))}
+                  <p className="pt-2 text-muted-foreground">
+                    Subtotal: {formatEuro(order.subtotalCents)}
+                    {order.deliveryFeeCents > 0 &&
+                      ` · Delivery: ${formatEuro(order.deliveryFeeCents)}`}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-2"
+                    disabled={itemsLocked}
+                    onClick={() => setEditingItems(true)}
+                  >
+                    Edit order
+                  </Button>
+                  {itemsLocked && (
+                    <p className="text-xs text-muted-foreground">
+                      Can't edit a {order.status} order.
+                    </p>
+                  )}
+                </>
+              )}
             </section>
 
             <section className="space-y-3 border-t border-border pt-4">

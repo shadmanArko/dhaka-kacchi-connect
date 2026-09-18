@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 import { withTransaction } from "../db";
-import type { OrderRecord, OrderStatus } from "./orders";
+import type { DeliveryAddressFields, OrderRecord, OrderStatus } from "./orders";
 
 /**
  * Everything a route handler needs to persist/read orders - and nothing
@@ -51,6 +51,26 @@ export interface OrdersRepository {
     discount: { discountCents: number; discountReason: string | null },
   ): Promise<void>;
   updateStatus(orderId: string, status: OrderStatus): Promise<void>;
+  /** Replaces an order's items and delivery details wholesale (staff
+   * correcting a mistake) - subtotalCents/deliveryFeeCents/address* must
+   * already be server-recomputed by the caller (see priceOrder/
+   * quoteDeliveryForAddress in index.ts), this never re-derives them.
+   * discount_cents is untouched - a pre-existing discount survives an item
+   * edit rather than silently resetting to zero. */
+  updateOrder(
+    orderId: string,
+    patch: {
+      deliveryDate: string;
+      fulfillmentType: "pickup" | "delivery";
+      address: DeliveryAddressFields | null;
+      addressLat: number | null;
+      addressLng: number | null;
+      distanceKm: number | null;
+      deliveryFeeCents: number;
+      subtotalCents: number;
+      items: OrderRecord["items"];
+    },
+  ): Promise<void>;
 }
 
 type OrderRow = {
@@ -269,6 +289,60 @@ async function updateStatus(pool: Pool, orderId: string, status: OrderStatus): P
   ]);
 }
 
+async function updateOrder(
+  pool: Pool,
+  orderId: string,
+  patch: {
+    deliveryDate: string;
+    fulfillmentType: "pickup" | "delivery";
+    address: DeliveryAddressFields | null;
+    addressLat: number | null;
+    addressLng: number | null;
+    distanceKm: number | null;
+    deliveryFeeCents: number;
+    subtotalCents: number;
+    items: OrderRecord["items"];
+  },
+): Promise<void> {
+  await withTransaction(async (client) => {
+    await client.query(
+      `UPDATE orders
+       SET delivery_date = $1, fulfillment_type = $2,
+           address_street = $3, address_house_number = $4, address_postal_code = $5, address_city = $6,
+           address_lat = $7, address_lng = $8, distance_km = $9, delivery_fee_cents = $10,
+           subtotal_cents = $11, updated_at = now()
+       WHERE id = $12`,
+      [
+        patch.deliveryDate,
+        patch.fulfillmentType,
+        patch.address?.street ?? null,
+        patch.address?.houseNumber ?? null,
+        patch.address?.postalCode ?? null,
+        patch.address?.city ?? null,
+        patch.addressLat,
+        patch.addressLng,
+        patch.distanceKm,
+        patch.deliveryFeeCents,
+        patch.subtotalCents,
+        orderId,
+      ],
+    );
+
+    // Delete-then-reinsert rather than diffing rows - order_items has no
+    // natural key to match old/new lines against (a staff-typed edit can
+    // change quantity, add, or remove any line), and at one batch's worth of
+    // items per order this is cheap.
+    await client.query("DELETE FROM order_items WHERE order_id = $1", [orderId]);
+    for (const item of patch.items) {
+      await client.query(
+        `INSERT INTO order_items (order_id, sku, name, unit_price_cents, quantity)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [orderId, item.sku, item.name, item.unitPriceCents, item.quantity],
+      );
+    }
+  });
+}
+
 /** Creates the real, Postgres-backed OrdersRepository. The only place in the
  * app that imports `pg` types directly for orders - everywhere else depends
  * on the OrdersRepository interface above. */
@@ -296,5 +370,6 @@ export function createPostgresOrdersRepository(pool: Pool): OrdersRepository {
     listAll: (filters) => listAll(pool, filters),
     applyDiscount: (orderId, discount) => applyDiscount(pool, orderId, discount),
     updateStatus: (orderId, status) => updateStatus(pool, orderId, status),
+    updateOrder: (orderId, patch) => updateOrder(pool, orderId, patch),
   };
 }

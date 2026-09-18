@@ -84,6 +84,27 @@ export function sendDiscountAppliedTelegramMessage(order: OrderRecord): Promise<
   return sendTelegramMessage(text);
 }
 
+/**
+ * Sent to the owner when staff edit an order's items or delivery details via
+ * the admin panel - same "stale info" gap sendDiscountAppliedTelegramMessage
+ * closes for a discount, extended to any item/date/address change.
+ */
+export function sendOrderUpdatedTelegramMessage(
+  previous: OrderRecord,
+  updated: OrderRecord,
+): Promise<boolean> {
+  const previousItemSummary = previous.items.map((i) => `${i.quantity}x ${i.name}`).join(", ");
+  const newItemSummary = updated.items.map((i) => `${i.quantity}x ${i.name}`).join(", ");
+  const text =
+    `Order #${updated.id} updated\n` +
+    `Now: ${newItemSummary}\n` +
+    `Was: ${previousItemSummary}\n` +
+    `Total: €${(totalCents(updated) / 100).toFixed(2)} (cash on delivery)\n` +
+    `${fulfillmentLine(updated)}\n` +
+    `Customer: ${updated.customerName}, ${updated.customerPhone}`;
+  return sendTelegramMessage(text);
+}
+
 /** Wires the Telegram alert into the order-created event stream and records
  * the outcome on the order itself. Call once at startup. */
 export function registerTelegramNotifications(repository: OrdersRepository): void {

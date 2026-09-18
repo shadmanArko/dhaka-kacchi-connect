@@ -40,6 +40,7 @@ import { checkPostalCode, quoteDeliveryForAddress } from "./lib/delivery";
 import {
   registerEmailNotifications,
   sendDiscountAppliedEmail,
+  sendOrderUpdatedEmail,
   sendPasswordResetEmail,
 } from "./lib/email";
 import { emitOrderCreated } from "./lib/orderEvents";
@@ -52,6 +53,7 @@ import {
   handleTelegramWebhookBody,
   registerTelegramNotifications,
   sendDiscountAppliedTelegramMessage,
+  sendOrderUpdatedTelegramMessage,
   secureCompare,
 } from "./lib/telegram";
 import {
@@ -65,6 +67,7 @@ import {
   AdminOrderListQuerySchema,
   AdminOrderListResponseSchema,
   AdminOrderResultSchema,
+  AdminOrderUpdateInputSchema,
   AdminStatusInputSchema,
   AuthResultSchema,
   DeliveryAddressSchema,
@@ -1443,6 +1446,133 @@ v1Admin.openapi(adminApplyDiscountRoute, async (c) => {
     sendDiscountAppliedTelegramMessage(updated).catch((err) => {
       Sentry.captureException(err);
       console.error("sendDiscountAppliedTelegramMessage failed:", err);
+    }),
+  ]);
+
+  return c.json({ order: toAdminOrder(updated) }, 200);
+});
+
+const adminUpdateOrderRoute = createRoute({
+  method: "patch",
+  path: "/orders/{id}",
+  operationId: "adminUpdateOrder",
+  summary: "Correct an already-placed order's items or delivery details",
+  security: [{ adminBearerAuth: [] }],
+  request: {
+    params: z.object({ id: z.string() }),
+    body: {
+      content: { "application/json": { schema: AdminOrderUpdateInputSchema } },
+      required: true,
+    },
+  },
+  responses: {
+    200: {
+      content: { "application/json": { schema: AdminOrderResultSchema } },
+      description: "Order updated.",
+    },
+    400: {
+      content: { "application/json": { schema: ErrorResponseSchema } },
+      description: "Invalid input, or the order can no longer be edited.",
+    },
+    404: {
+      content: { "application/json": { schema: ErrorResponseSchema } },
+      description: "No such order.",
+    },
+  },
+});
+// Re-fires the order-updated notifications every successful call, same
+// "the admin UI must confirm before submitting" contract as
+// adminApplyDiscountRoute - a fumbled double-submit here double-notifies the
+// customer/owner.
+v1Admin.openapi(adminUpdateOrderRoute, async (c) => {
+  const { id } = c.req.valid("param");
+  const { items, deliveryDate, fulfillmentType, address } = c.req.valid("json");
+
+  const previous = await ordersRepository.findById(id);
+  if (!previous) return c.json({ error: "not_found", message: "Order not found." }, 404);
+  if (previous.status === "cancelled" || previous.status === "delivered") {
+    return c.json(
+      {
+        error: "order_locked",
+        message: `Can't edit a ${previous.status} order.`,
+      },
+      400,
+    );
+  }
+
+  // Deliberately isValidSaturday, not isDeliveryDateStillOrderable - same
+  // reasoning as adminCreateOrderRoute: staff correcting an order is exactly
+  // the point of skipping the customer-facing Friday-18:00 cutoff.
+  if (!isValidSaturday(deliveryDate)) {
+    return c.json(
+      { error: "invalid_delivery_date", message: "Delivery date must be a Saturday (YYYY-MM-DD)." },
+      400,
+    );
+  }
+
+  // Same server-side re-derivation as adminCreateOrderRoute - never trust
+  // the client for price/fee, admin or not.
+  let addressFields: OrderRecord["address"] = null;
+  let addressLat: number | null = null;
+  let addressLng: number | null = null;
+  let distanceKm: number | null = null;
+  let deliveryFeeCents = 0;
+
+  if (fulfillmentType === "delivery") {
+    if (!address) {
+      return c.json({ error: "address_required", message: "A delivery address is required." }, 400);
+    }
+    const quote = quoteDeliveryForAddress(address);
+    if (!quote.ok) {
+      return c.json({ error: quote.reason, message: quote.message }, 400);
+    }
+    if (!quote.deliverable) {
+      const message =
+        quote.reason === "address_not_found"
+          ? "We couldn't find that address. Please check it and try again."
+          : quote.reason === "outside_berlin"
+            ? "That address is outside Berlin — delivery isn't available there."
+            : "That address is too far for delivery.";
+      return c.json({ error: quote.reason, message }, 400);
+    }
+    addressFields = address;
+    addressLat = quote.lat;
+    addressLng = quote.lng;
+    distanceKm = quote.distanceKm;
+    deliveryFeeCents = quote.feeCents;
+  }
+
+  let pricedItems: OrderRecord["items"];
+  try {
+    pricedItems = priceOrder(items);
+  } catch (err) {
+    if (err instanceof OrderValidationError) {
+      return c.json({ error: "invalid_items", message: err.message }, 400);
+    }
+    throw err;
+  }
+
+  await ordersRepository.updateOrder(id, {
+    deliveryDate,
+    fulfillmentType,
+    address: addressFields,
+    addressLat,
+    addressLng,
+    distanceKm,
+    deliveryFeeCents,
+    subtotalCents: pricedItems.reduce((sum, i) => sum + i.unitPriceCents * i.quantity, 0),
+    items: pricedItems,
+  });
+  const updated = (await ordersRepository.findById(id))!;
+
+  await Promise.allSettled([
+    sendOrderUpdatedEmail(previous, updated).catch((err) => {
+      Sentry.captureException(err);
+      console.error("sendOrderUpdatedEmail failed:", err);
+    }),
+    sendOrderUpdatedTelegramMessage(previous, updated).catch((err) => {
+      Sentry.captureException(err);
+      console.error("sendOrderUpdatedTelegramMessage failed:", err);
     }),
   ]);
 
