@@ -17,7 +17,7 @@ import { SiteFooter } from "@/components/layout/SiteFooter";
 import { FloatingSocial } from "@/components/layout/FloatingSocial";
 import { ConsentBanner } from "@/components/ConsentBanner";
 import { SessionProvider } from "@/hooks/useSession";
-import { initAnalytics, trackPageview } from "@/lib/analytics";
+import { initAnalytics, trackPageview, trackWarehouseEvent } from "@/lib/analytics";
 import { SITE_URL } from "@/lib/seo";
 import i18n, { DEFAULT_LOCALE, localeDir, type Locale } from "@/lib/i18n";
 
@@ -210,14 +210,20 @@ function RootShell({ children }: { children: ReactNode }) {
 function Analytics() {
   const { pathname } = useLocation();
   const isAdminRoute = pathname.startsWith("/admin");
+  // The order page (routes/order.tsx and its /$locale variant) IS the menu -
+  // see OrderPage.tsx; there's no separate /menu route to key off instead.
+  const isOrderRoute = pathname.endsWith("/order");
 
   useEffect(() => {
     initAnalytics();
   }, []);
 
   useEffect(() => {
-    if (!isAdminRoute) trackPageview();
-  }, [pathname, isAdminRoute]);
+    if (isAdminRoute) return;
+    trackPageview();
+    trackWarehouseEvent("page_view");
+    if (isOrderRoute) trackWarehouseEvent("menu_view");
+  }, [pathname, isAdminRoute, isOrderRoute]);
 
   return null;
 }

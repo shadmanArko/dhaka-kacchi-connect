@@ -60,6 +60,9 @@
  * traffic when this shipped.
  */
 
+import { api, type WarehouseEventName } from "./api";
+import { getAnonymousId, getBeaconSessionId } from "./beaconIdentity";
+
 const POSTHOG_KEY = import.meta.env.VITE_POSTHOG_KEY;
 const POSTHOG_HOST = import.meta.env.VITE_POSTHOG_HOST ?? "https://eu.i.posthog.com";
 
@@ -218,6 +221,10 @@ export function giveConsent(): void {
   // their next navigation, losing funnel entry attribution. Ordered last so
   // the pageview lands on the new identity and inside the recording.
   trackPageview();
+  // The warehouse beacon was gated off until this exact moment (see
+  // trackWarehouseEvent's consent gate) - the page_view for this pageload
+  // was skipped, so fire it now instead of waiting for the next navigation.
+  trackWarehouseEvent("page_view");
 }
 
 export function withdrawConsent(): void {
@@ -232,6 +239,42 @@ export function withdrawConsent(): void {
 
 export function trackEvent(name: string, properties?: Record<string, unknown>): void {
   withPostHog((ph) => ph.capture(name, properties));
+}
+
+/**
+ * Fires a first-party event to the warehouse's POST /v1/events (see
+ * dhaka_kacchi_ai_harness's ARCHITECTURE.md section 4.7) - a completely
+ * separate pipe from PostHog above, with its own identity (beaconIdentity.ts)
+ * and its own fixed vocabulary (WarehouseEventName).
+ *
+ * Gated on the SAME consent decision as PostHog, even though this beacon has
+ * no cookieless fallback of its own: it's simplest and most conservative to
+ * ship this as "off until the visitor explicitly accepts" rather than invent
+ * a second anonymous-capture mode. A pending or rejected visitor sends zero
+ * warehouse events, including page_view - accepted under-counting, not a bug.
+ *
+ * Deliberately fire-and-forget: analytics must never surface an error to the
+ * UI, block a caller, or throw. Every call site that ALSO calls trackEvent()
+ * (PostHog) should call this too, but the two are independent - one failing
+ * must never affect the other.
+ */
+export function trackWarehouseEvent(
+  eventName: WarehouseEventName,
+  properties?: Record<string, unknown>,
+  orderId?: string,
+): void {
+  if (readConsent() !== "granted") return;
+  api
+    .trackEvent({
+      eventName,
+      anonymousId: getAnonymousId() ?? undefined,
+      sessionId: getBeaconSessionId() ?? undefined,
+      orderId,
+      properties,
+    })
+    .catch(() => {
+      // Nowhere for this to go - see the header comment.
+    });
 }
 
 export function trackPageview(): void {

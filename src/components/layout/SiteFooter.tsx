@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { site } from "@/content/site";
 import { LocaleLink } from "@/components/layout/LocaleLink";
 import { buildWaLink } from "@/lib/whatsapp";
+import { trackWarehouseEvent } from "@/lib/analytics";
 import logo from "@/assets/logo-nav.png";
 
 export function SiteFooter() {
@@ -28,7 +29,11 @@ export function SiteFooter() {
       </div>
 
       <div className="font-sans text-[0.76rem] leading-[1.8] text-muted-warm md:text-right text-center">
-        <a href={`mailto:${site.email}`} className="text-gold no-underline hover:underline">
+        <a
+          href={`mailto:${site.email}`}
+          onClick={() => trackWarehouseEvent("contact", { channel: "email" })}
+          className="text-gold no-underline hover:underline"
+        >
           {site.email}
         </a>
         <br />
@@ -39,6 +44,7 @@ export function SiteFooter() {
           href={buildWaLink()}
           target="_blank"
           rel="noopener noreferrer"
+          onClick={() => trackWarehouseEvent("contact", { channel: "whatsapp" })}
           className="text-gold no-underline hover:underline"
         >
           {t("footer.whatsapp")}

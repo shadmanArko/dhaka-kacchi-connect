@@ -1,6 +1,7 @@
 import { Facebook, Instagram } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { site } from "@/content/site";
+import { trackWarehouseEvent } from "@/lib/analytics";
 
 export function FloatingSocial() {
   const { t } = useTranslation();
@@ -11,6 +12,7 @@ export function FloatingSocial() {
         target="_blank"
         rel="noopener noreferrer"
         aria-label={t("social.instagram")}
+        onClick={() => trackWarehouseEvent("social_click", { platform: "instagram" })}
         className="flex items-center justify-center h-11 w-11 rounded-full bg-gradient-to-br from-[#833ab4] via-[#fd1d1d] to-[#fcb045] text-white hover:scale-110 transition-transform"
       >
         <Instagram size={20} />
@@ -20,6 +22,7 @@ export function FloatingSocial() {
         target="_blank"
         rel="noopener noreferrer"
         aria-label={t("social.facebook")}
+        onClick={() => trackWarehouseEvent("social_click", { platform: "facebook" })}
         className="flex items-center justify-center h-11 w-11 rounded-full bg-[#1877F2] text-white hover:scale-110 transition-transform"
       >
         <Facebook size={20} />

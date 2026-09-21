@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { PageHero } from "@/components/sections/PageHero";
 import { Reveal } from "@/components/ui/Reveal";
 import { api } from "@/lib/api";
+import { trackWarehouseEvent } from "@/lib/analytics";
 
 type State = "idle" | "loading" | "success" | "error";
 
@@ -19,6 +20,7 @@ export function SubscribePage() {
     try {
       await api.subscribe(email);
       setState("success");
+      trackWarehouseEvent("newsletter_signup");
       setEmail("");
     } catch (err) {
       setState("error");

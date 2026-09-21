@@ -222,6 +222,31 @@ function authHeader(token: string): HeadersInit {
   return { Authorization: `Bearer ${token}` };
 }
 
+// --- Marketing/behavioral events ---
+// Mirrors worker/src/schemas.ts's EventInputSchema exactly - see that
+// file's own comment on why this list is a manual, cross-repo contract with
+// the warehouse's event_taxonomy seed (dhaka_kacchi_ai_harness's
+// ARCHITECTURE.md section 4.7), nothing enforcing sync.
+export type WarehouseEventName =
+  | "page_view"
+  | "menu_view"
+  | "product_view"
+  | "add_to_cart"
+  | "begin_checkout"
+  | "purchase"
+  | "coupon_used"
+  | "social_click"
+  | "contact"
+  | "newsletter_signup";
+
+export type EventInput = {
+  eventName: WarehouseEventName;
+  anonymousId?: string;
+  sessionId?: string;
+  orderId?: string;
+  properties?: Record<string, unknown>;
+};
+
 // --- Admin panel ---
 // A separate type/identity space from the customer types above - an admin
 // token and a customer token (and their user records) are never
@@ -424,6 +449,13 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ token, newPassword }),
     }),
+
+  // Deliberately no timeoutMs override (short DEFAULT_TIMEOUT_MS is fine -
+  // and no caller should ever wait on this) and no auth header - the worker
+  // route is public (fired from anonymous, logged-out page loads). Called
+  // through analytics.ts's trackWarehouseEvent, never directly.
+  trackEvent: (input: EventInput) =>
+    apiFetch<{ id: string }>("/v1/events", { method: "POST", body: JSON.stringify(input) }),
 };
 
 export const adminApi = {

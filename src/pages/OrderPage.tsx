@@ -12,7 +12,7 @@ import { useSession } from "@/hooks/useSession";
 import { buildWaLink } from "@/lib/whatsapp";
 import { readCart, writeCart, clearCart } from "@/lib/cart";
 import { site } from "@/content/site";
-import { trackEvent } from "@/lib/analytics";
+import { trackEvent, trackWarehouseEvent } from "@/lib/analytics";
 import {
   api,
   ApiError,
@@ -322,6 +322,7 @@ export function OrderPage() {
     if (!session.token || !session.customer) {
       if (!canCheckout) return;
       trackEvent("order_checkout_clicked");
+      trackWarehouseEvent("begin_checkout", { itemCount, totalCents });
       setAuthModalOpen(true);
       return;
     }
@@ -371,6 +372,7 @@ export function OrderPage() {
       // duplicate waiting to happen.
       clearCart();
       trackEvent("order_submitted", { fulfillmentType, totalCents, itemCount });
+      trackWarehouseEvent("purchase", { fulfillmentType, totalCents, itemCount }, res.orderId);
     } catch (err) {
       setSubmitState("error");
       // A timeout here does NOT mean the order failed. worker/src/index.ts
@@ -615,7 +617,13 @@ export function OrderPage() {
                       </span>
                       <button
                         type="button"
-                        onClick={() => setQty(item.sku, (quantities[item.sku] ?? 0) + 1)}
+                        onClick={() => {
+                          setQty(item.sku, (quantities[item.sku] ?? 0) + 1);
+                          trackWarehouseEvent("add_to_cart", {
+                            sku: item.sku,
+                            priceCents: item.priceCents,
+                          });
+                        }}
                         className="w-11 h-11 border border-line-strong text-cream hover:border-gold/50 active:bg-gold/20 active:border-gold transition-colors"
                         aria-label={t("order.increase", { name: item.name })}
                       >
