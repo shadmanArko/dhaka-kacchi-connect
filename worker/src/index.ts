@@ -1654,8 +1654,14 @@ v1.openapi(createEventRoute, async (c) => {
   const body = c.req.valid("json");
   const ipAddress = clientIp(c);
 
-  if (ipAddress && (await eventsRepository.countRecentByIp(ipAddress, 1)) >= EVENTS_MAX_PER_IP_PER_MINUTE) {
-    return c.json({ error: "too_many_requests", message: "Too many events. Please slow down." }, 429);
+  if (
+    ipAddress &&
+    (await eventsRepository.countRecentByIp(ipAddress, 1)) >= EVENTS_MAX_PER_IP_PER_MINUTE
+  ) {
+    return c.json(
+      { error: "too_many_requests", message: "Too many events. Please slow down." },
+      429,
+    );
   }
 
   const id = newId("evt");
