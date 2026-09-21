@@ -5,10 +5,11 @@
 -- NEVER apply this via `npm run db:migrate` - see 0001's header and this
 -- directory's README for why.
 --
--- References ordering_reader, same as 0001 - this file will fail on a local
--- dev database that has no such role (the final GRANT statement below), which
--- is expected; it is not meant to run there. To test the CREATE TABLE/INDEX
--- statements locally, comment out that one GRANT line.
+-- References ordering_app/ordering_reader, same as 0001 - this file will
+-- fail on a local dev database that has neither role (the two GRANT
+-- statements at the bottom), which is expected; it is not meant to run
+-- there. To test the CREATE TABLE/INDEX statements locally, comment out
+-- both GRANT lines.
 --
 -- Adds `events`: a first-party marketing/behavioral event capture table fed
 -- by POST /v1/events (page_view, add_to_cart, purchase, ...). This is the
@@ -26,9 +27,17 @@
 -- describes): that only auto-applies to tables CREATEd by ordering_app
 -- itself, and this file's own documented apply command connects as
 -- `-U postgres` (superuser), not ordering_app - so this table's owner is
--- whichever role actually runs this file, not ordering_app, and the
--- default-privilege inheritance cannot be assumed. An explicit GRANT below
--- sidesteps the question entirely instead of depending on it.
+-- whichever role actually runs this file, not ordering_app. Explicit GRANTs
+-- below sidestep the question entirely instead of depending on it.
+--
+-- CRITICALLY, that means ordering_app itself - the role the running
+-- application actually connects as (see deploy/docker-compose.yml) - has NO
+-- implicit access either, for the exact same reason: owning the DATABASE
+-- (`CREATE DATABASE ordering OWNER ordering_app`) does not grant rights on a
+-- table owned by a different role. Without the GRANT below, every
+-- POST /v1/events fails with "permission denied for table events" the
+-- moment this migration is applied - caught the hard way once, on
+-- production, before this comment existed.
 --
 -- occurred_at is TIMESTAMPTZ, not TEXT like the older SQLite-ported columns
 -- (see schema.sql's header on the TEXT-vs-TIMESTAMPTZ rule) - this warehouse
@@ -69,6 +78,9 @@ CREATE INDEX IF NOT EXISTS idx_events_ip_address_occurred_at ON events(ip_addres
 
 -- Explicit and idempotent (GRANT is always safe to re-run) - see the header
 -- note above on why this isn't left to the default-privilege mechanism.
--- ordering_reader is the sibling warehouse's read-only role; this is the
--- only cross-repo read path this table needs.
+-- ordering_app is the running application's own role (SELECT for the
+-- throttle count, INSERT to record an event - never UPDATE/DELETE, events
+-- are append-only). ordering_reader is the sibling warehouse's read-only
+-- role, its only cross-repo read path into this table.
+GRANT SELECT, INSERT ON events TO ordering_app;
 GRANT SELECT ON events TO ordering_reader;
