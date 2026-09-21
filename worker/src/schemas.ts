@@ -224,6 +224,49 @@ export const MessageResultSchema = z
   })
   .openapi("MessageResult");
 
+// --- Marketing/behavioral events -------------------------------------------
+// Fed to the sibling dhaka_kacchi_ai_harness warehouse's event_taxonomy -
+// see migrations-manual/0002_events.sql. This enum is the actual gatekeeper
+// on what event_name values this backend accepts; keeping it in sync with
+// that repo's seeded taxonomy is a manual, cross-repo contract with nothing
+// enforcing it - a known, accepted limitation.
+export const EVENT_NAMES = [
+  "page_view",
+  "menu_view",
+  "product_view",
+  "add_to_cart",
+  "begin_checkout",
+  "purchase",
+  "coupon_used",
+  "social_click",
+  "contact",
+  "newsletter_signup",
+] as const;
+
+export const EventInputSchema = z
+  .object({
+    eventName: z.enum(EVENT_NAMES),
+    anonymousId: z.string().max(200).optional(),
+    sessionId: z.string().max(200).optional(),
+    orderId: z.string().max(200).optional(),
+    // Size-capped, not schema-validated per event_name: keeping this loose
+    // is what lets the taxonomy (in a different repo/language) evolve
+    // without a matching code change here every time. The size cap is what
+    // stands in for that missing per-event-name validation, so an
+    // unauthenticated caller can't post an arbitrarily large jsonb blob.
+    properties: z
+      .record(z.string(), z.unknown())
+      .refine((v) => JSON.stringify(v).length <= 4000, "properties is too large.")
+      .optional(),
+  })
+  .openapi("EventInput");
+
+export const EventResultSchema = z
+  .object({
+    id: z.string().openapi({ example: "evt_2f2db69b-a757-4f0d-9ff8-33eee670647f" }),
+  })
+  .openapi("EventResult");
+
 // --- Admin panel ----------------------------------------------------------
 // A completely separate identity/schema space from the customer schemas
 // above - never shares a type with PublicCustomer/AuthResult/etc., so an

@@ -33,6 +33,11 @@ export const LOGIN_MAX_FAILED_ATTEMPTS = 5;
 export const LOGIN_LOCKOUT_MINUTES = 15;
 export const LOGIN_MAX_ATTEMPTS_PER_IP_PER_10MIN = 20;
 
+// A page-view beacon fires far more often than a login/OTP attempt, so this
+// ceiling is deliberately generous - it exists to blunt basic scripted abuse
+// of an unauthenticated endpoint, not to bound normal browsing.
+export const EVENTS_MAX_PER_IP_PER_MINUTE = 60;
+
 /** Hashes a plaintext password for storage. Never store the raw password. */
 export function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, BCRYPT_COST_FACTOR);

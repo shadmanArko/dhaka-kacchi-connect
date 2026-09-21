@@ -18,6 +18,7 @@ import {
   OTP_MAX_SENDS_PER_PHONE_PER_HOUR,
   OTP_MAX_SENDS_PER_PHONE_PER_DAY,
   OTP_MAX_SENDS_PER_IP_PER_HOUR,
+  EVENTS_MAX_PER_IP_PER_MINUTE,
   SESSION_TTL_DAYS,
   ADMIN_SESSION_TTL_DAYS,
   PASSWORD_RESET_TTL_MINUTES,
@@ -44,6 +45,7 @@ import {
   sendPasswordResetEmail,
 } from "./lib/email";
 import { emitOrderCreated } from "./lib/orderEvents";
+import { createPostgresEventsRepository } from "./lib/eventsRepository";
 import { OrderValidationError, priceOrder, totalCents, type OrderRecord } from "./lib/orders";
 import { createPostgresOrdersRepository } from "./lib/ordersRepository";
 import { createPostgresOtpRepository } from "./lib/otpRepository";
@@ -73,6 +75,8 @@ import {
   DeliveryAddressSchema,
   DeliveryQuoteResponseSchema,
   ErrorResponseSchema,
+  EventInputSchema,
+  EventResultSchema,
   LoginInputSchema,
   MenuItemSchema,
   MeResultSchema,
@@ -101,6 +105,7 @@ const sessionsRepository = createPostgresSessionsRepository(pool);
 const passwordResetTokensRepository = createPostgresPasswordResetTokensRepository(pool);
 const adminUsersRepository = createPostgresAdminUsersRepository(pool);
 const adminSessionsRepository = createPostgresAdminSessionsRepository(pool);
+const eventsRepository = createPostgresEventsRepository(pool);
 registerEmailNotifications(ordersRepository);
 registerTelegramNotifications(ordersRepository);
 
@@ -1617,6 +1622,63 @@ v1Admin.openapi(adminUpdateStatusRoute, async (c) => {
   await ordersRepository.updateStatus(id, status);
   const updated = (await ordersRepository.findById(id))!;
   return c.json({ order: toAdminOrder(updated) }, 200);
+});
+
+// --- Marketing/behavioral events -------------------------------------------
+// See migrations-manual/0002_events.sql for the full design rationale. This
+// is a beacon endpoint: called from anonymous, logged-out browser sessions
+// on every page view, so it's public (no auth) like the OTP-issuing routes
+// above, and throttled the same way (count-by-IP, not the DB-layer failed-
+// login-lockout machinery, which assumes an identifiable account).
+const createEventRoute = createRoute({
+  method: "post",
+  path: "/events",
+  operationId: "createEvent",
+  summary: "Record a marketing/behavioral event (page_view, add_to_cart, purchase, ...)",
+  security: [], // deliberately public - fired from anonymous, logged-out page loads
+  request: {
+    body: { content: { "application/json": { schema: EventInputSchema } }, required: true },
+  },
+  responses: {
+    201: {
+      content: { "application/json": { schema: EventResultSchema } },
+      description: "Event recorded.",
+    },
+    429: {
+      content: { "application/json": { schema: ErrorResponseSchema } },
+      description: "Too many events from this IP.",
+    },
+  },
+});
+v1.openapi(createEventRoute, async (c) => {
+  const body = c.req.valid("json");
+  const ipAddress = clientIp(c);
+
+  if (ipAddress && (await eventsRepository.countRecentByIp(ipAddress, 1)) >= EVENTS_MAX_PER_IP_PER_MINUTE) {
+    return c.json({ error: "too_many_requests", message: "Too many events. Please slow down." }, 429);
+  }
+
+  const id = newId("evt");
+  await eventsRepository.insertEvent({
+    id,
+    eventName: body.eventName,
+    // Always server-assigned, never a client-supplied timestamp - see
+    // migrations-manual/0002_events.sql.
+    occurredAt: new Date(),
+    source: "website",
+    anonymousId: body.anonymousId ?? null,
+    sessionId: body.sessionId ?? null,
+    // A logged-in caller would authenticate via the existing bearer-token
+    // flow; this endpoint stays fully public and unauthenticated, so
+    // customer_id is always resolved server-side elsewhere (or left null),
+    // never taken from the request body.
+    customerId: null,
+    orderId: body.orderId ?? null,
+    ipAddress,
+    properties: body.properties ?? {},
+  });
+
+  return c.json({ id }, 201);
 });
 
 app.route("/v1", v1);

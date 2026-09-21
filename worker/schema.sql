@@ -42,6 +42,7 @@
 -- "TEXT for values only ever passed through," TIMESTAMPTZ for values SQL
 -- itself needs to reason about.
 
+DROP TABLE IF EXISTS events;
 DROP TABLE IF EXISTS order_items;
 DROP TABLE IF EXISTS orders;
 DROP TABLE IF EXISTS sessions;
@@ -232,3 +233,25 @@ CREATE TABLE IF NOT EXISTS order_items (
 CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_orders_delivery_date ON orders(delivery_date);
 CREATE INDEX IF NOT EXISTS idx_orders_customer_id ON orders(customer_id);
+
+-- Marketing/behavioral event capture (added with migrations-manual/0002) -
+-- see that file's header for the full design rationale, including why this
+-- is NOT revoked from ordering_reader the way admin_users/admin_sessions
+-- are: it exists specifically to be read cross-repo by the sibling
+-- dhaka_kacchi_ai_harness warehouse.
+CREATE TABLE IF NOT EXISTS events (
+  id             TEXT PRIMARY KEY,           -- e.g. "evt_<uuid>"
+  event_name     TEXT NOT NULL,
+  occurred_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  source         TEXT NOT NULL DEFAULT 'website',
+  anonymous_id   TEXT,
+  session_id     TEXT,
+  customer_id    TEXT REFERENCES customers(id),
+  order_id       TEXT REFERENCES orders(id),
+  ip_address     TEXT,
+  properties     JSONB NOT NULL DEFAULT '{}'::jsonb
+);
+CREATE INDEX IF NOT EXISTS idx_events_event_name ON events(event_name);
+CREATE INDEX IF NOT EXISTS idx_events_occurred_at ON events(occurred_at);
+CREATE INDEX IF NOT EXISTS idx_events_customer_id ON events(customer_id) WHERE customer_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_events_ip_address_occurred_at ON events(ip_address, occurred_at);
