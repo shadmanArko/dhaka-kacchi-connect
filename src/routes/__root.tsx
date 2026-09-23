@@ -19,6 +19,7 @@ import { ConsentBanner } from "@/components/ConsentBanner";
 import { SessionProvider } from "@/hooks/useSession";
 import { initAnalytics, trackPageview, trackWarehouseEvent } from "@/lib/analytics";
 import { SITE_URL } from "@/lib/seo";
+import { captureUtmFromLocation } from "@/lib/utmCapture";
 import i18n, { DEFAULT_LOCALE, localeDir, type Locale } from "@/lib/i18n";
 
 /** Every route's URL is the single source of truth for which language is
@@ -215,6 +216,10 @@ function Analytics() {
   const isOrderRoute = pathname.endsWith("/order");
 
   useEffect(() => {
+    // Before initAnalytics(): captures whatever utm_* params this tab's
+    // very first URL carried, independent of consent and of PostHog's own
+    // (async, chunked) load - see utmCapture.ts.
+    captureUtmFromLocation();
     initAnalytics();
   }, []);
 

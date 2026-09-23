@@ -62,6 +62,7 @@
 
 import { api, type WarehouseEventName } from "./api";
 import { getAnonymousId, getBeaconSessionId } from "./beaconIdentity";
+import { getSessionUtm } from "./utmCapture";
 
 const POSTHOG_KEY = import.meta.env.VITE_POSTHOG_KEY;
 const POSTHOG_HOST = import.meta.env.VITE_POSTHOG_HOST ?? "https://eu.i.posthog.com";
@@ -257,6 +258,14 @@ export function trackEvent(name: string, properties?: Record<string, unknown>): 
  * UI, block a caller, or throw. Every call site that ALSO calls trackEvent()
  * (PostHog) should call this too, but the two are independent - one failing
  * must never affect the other.
+ *
+ * Every call carries this session's captured UTM values (see utmCapture.ts),
+ * if any - not just page_view. A purchase minutes or days into the same
+ * session still carries the touch that brought the visitor in, which is
+ * what lets the warehouse's ingest job resolve event.channel_id/campaign_id/
+ * campaign_variant_id at all. Caller-supplied properties win on key
+ * collision (spread last), though none are expected to share the utm_*
+ * namespace.
  */
 export function trackWarehouseEvent(
   eventName: WarehouseEventName,
@@ -264,13 +273,14 @@ export function trackWarehouseEvent(
   orderId?: string,
 ): void {
   if (readConsent() !== "granted") return;
+  const utm = getSessionUtm();
   api
     .trackEvent({
       eventName,
       anonymousId: getAnonymousId() ?? undefined,
       sessionId: getBeaconSessionId() ?? undefined,
       orderId,
-      properties,
+      properties: utm ? { ...utm, ...properties } : properties,
     })
     .catch(() => {
       // Nowhere for this to go - see the header comment.
