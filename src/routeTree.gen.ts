@@ -23,6 +23,7 @@ import { Route as AdminLayoutIndexRouteImport } from './routes/admin/_layout.ind
 import { Route as LocaleLayoutIndexRouteImport } from './routes/$locale/_layout.index'
 import { Route as AdminLayoutReportingRouteImport } from './routes/admin/_layout.reporting'
 import { Route as AdminLayoutLoginRouteImport } from './routes/admin/_layout.login'
+import { Route as AdminLayoutCockpitRouteImport } from './routes/admin/_layout.cockpit'
 import { Route as LocaleLayoutSubscribeRouteImport } from './routes/$locale/_layout.subscribe'
 import { Route as LocaleLayoutPrivacyRouteImport } from './routes/$locale/_layout.privacy'
 import { Route as LocaleLayoutOrderRouteImport } from './routes/$locale/_layout.order'
@@ -100,6 +101,11 @@ const AdminLayoutLoginRoute = AdminLayoutLoginRouteImport.update({
   path: '/login',
   getParentRoute: () => AdminLayoutRoute,
 } as any)
+const AdminLayoutCockpitRoute = AdminLayoutCockpitRouteImport.update({
+  id: '/cockpit',
+  path: '/cockpit',
+  getParentRoute: () => AdminLayoutRoute,
+} as any)
 const LocaleLayoutSubscribeRoute = LocaleLayoutSubscribeRouteImport.update({
   id: '/subscribe',
   path: '/subscribe',
@@ -147,6 +153,7 @@ export interface FileRoutesByFullPath {
   '/$locale/order': typeof LocaleLayoutOrderRoute
   '/$locale/privacy': typeof LocaleLayoutPrivacyRoute
   '/$locale/subscribe': typeof LocaleLayoutSubscribeRoute
+  '/admin/cockpit': typeof AdminLayoutCockpitRoute
   '/admin/login': typeof AdminLayoutLoginRoute
   '/admin/reporting': typeof AdminLayoutReportingRoute
   '/$locale/': typeof LocaleLayoutIndexRoute
@@ -167,6 +174,7 @@ export interface FileRoutesByTo {
   '/$locale/order': typeof LocaleLayoutOrderRoute
   '/$locale/privacy': typeof LocaleLayoutPrivacyRoute
   '/$locale/subscribe': typeof LocaleLayoutSubscribeRoute
+  '/admin/cockpit': typeof AdminLayoutCockpitRoute
   '/admin/login': typeof AdminLayoutLoginRoute
   '/admin/reporting': typeof AdminLayoutReportingRoute
   '/$locale': typeof LocaleLayoutIndexRoute
@@ -190,6 +198,7 @@ export interface FileRoutesById {
   '/$locale/_layout/order': typeof LocaleLayoutOrderRoute
   '/$locale/_layout/privacy': typeof LocaleLayoutPrivacyRoute
   '/$locale/_layout/subscribe': typeof LocaleLayoutSubscribeRoute
+  '/admin/_layout/cockpit': typeof AdminLayoutCockpitRoute
   '/admin/_layout/login': typeof AdminLayoutLoginRoute
   '/admin/_layout/reporting': typeof AdminLayoutReportingRoute
   '/$locale/_layout/': typeof LocaleLayoutIndexRoute
@@ -214,6 +223,7 @@ export interface FileRouteTypes {
     | '/$locale/order'
     | '/$locale/privacy'
     | '/$locale/subscribe'
+    | '/admin/cockpit'
     | '/admin/login'
     | '/admin/reporting'
     | '/$locale/'
@@ -234,6 +244,7 @@ export interface FileRouteTypes {
     | '/$locale/order'
     | '/$locale/privacy'
     | '/$locale/subscribe'
+    | '/admin/cockpit'
     | '/admin/login'
     | '/admin/reporting'
     | '/$locale'
@@ -256,6 +267,7 @@ export interface FileRouteTypes {
     | '/$locale/_layout/order'
     | '/$locale/_layout/privacy'
     | '/$locale/_layout/subscribe'
+    | '/admin/_layout/cockpit'
     | '/admin/_layout/login'
     | '/admin/_layout/reporting'
     | '/$locale/_layout/'
@@ -376,6 +388,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminLayoutLoginRouteImport
       parentRoute: typeof AdminLayoutRoute
     }
+    '/admin/_layout/cockpit': {
+      id: '/admin/_layout/cockpit'
+      path: '/cockpit'
+      fullPath: '/admin/cockpit'
+      preLoaderRoute: typeof AdminLayoutCockpitRouteImport
+      parentRoute: typeof AdminLayoutRoute
+    }
     '/$locale/_layout/subscribe': {
       id: '/$locale/_layout/subscribe'
       path: '/subscribe'
@@ -444,6 +463,7 @@ const LocaleLayoutRouteWithChildren = LocaleLayoutRoute._addFileChildren(
 )
 
 interface AdminLayoutRouteChildren {
+  AdminLayoutCockpitRoute: typeof AdminLayoutCockpitRoute
   AdminLayoutLoginRoute: typeof AdminLayoutLoginRoute
   AdminLayoutReportingRoute: typeof AdminLayoutReportingRoute
   AdminLayoutIndexRoute: typeof AdminLayoutIndexRoute
@@ -451,6 +471,7 @@ interface AdminLayoutRouteChildren {
 }
 
 const AdminLayoutRouteChildren: AdminLayoutRouteChildren = {
+  AdminLayoutCockpitRoute: AdminLayoutCockpitRoute,
   AdminLayoutLoginRoute: AdminLayoutLoginRoute,
   AdminLayoutReportingRoute: AdminLayoutReportingRoute,
   AdminLayoutIndexRoute: AdminLayoutIndexRoute,

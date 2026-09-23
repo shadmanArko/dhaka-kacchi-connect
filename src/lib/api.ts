@@ -364,6 +364,35 @@ export type AdminReportingResult = {
   attributionCoverage: { attributed: number; unattributed: number };
 };
 
+// --- CEO cockpit (ARCHITECTURE.md section 4 - reads the sibling warehouse's
+// cockpit_alert table, see worker/src/lib/cockpitRepository.ts). Same
+// possibly-absent-deployment shape as reporting above. ---
+
+export type AlertSeverity = "info" | "warn" | "critical";
+
+export type CockpitAlert = {
+  id: string;
+  agent: string;
+  alertKey: string;
+  severity: AlertSeverity;
+  title: string;
+  detail: string | null;
+  detectedAt: string;
+  acknowledgedAt: string | null;
+};
+
+export type YesterdayHealth = {
+  orderCount: number;
+  revenue: number;
+  avgOrderValue: number;
+  marginRatio: number | null;
+};
+
+export type AdminCockpitResult = {
+  health: YesterdayHealth;
+  alerts: CockpitAlert[];
+};
+
 // Only required when the order isn't for an existing customer - a phone/
 // WhatsApp order realistically may not come with an email or DOB, so both
 // are optional here (the backend fills in a placeholder - see
@@ -535,6 +564,19 @@ export const adminApi = {
     ),
   getReporting: (token: string) =>
     apiFetch<AdminReportingResult>("/v1/admin/reporting", { headers: authHeader(token) }),
+  getCockpit: (token: string) =>
+    apiFetch<AdminCockpitResult>("/v1/admin/cockpit", { headers: authHeader(token) }),
+  acknowledgeAlert: (token: string, alertId: string) =>
+    apiFetch<void>(`/v1/admin/cockpit/alerts/${encodeURIComponent(alertId)}/acknowledge`, {
+      method: "PATCH",
+      headers: authHeader(token),
+    }),
+  resolveAlert: (token: string, alertId: string, resolution?: string) =>
+    apiFetch<void>(`/v1/admin/cockpit/alerts/${encodeURIComponent(alertId)}/resolve`, {
+      method: "PATCH",
+      headers: authHeader(token),
+      body: JSON.stringify({ resolution }),
+    }),
   createOrder: (token: string, input: AdminOrderInput) =>
     apiFetch<{ order: AdminOrder }>(
       "/v1/admin/orders",

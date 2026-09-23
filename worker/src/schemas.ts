@@ -555,3 +555,45 @@ export const AdminReportingResultSchema = z
     attributionCoverage: AttributionCoverageSchema,
   })
   .openapi("AdminReportingResult");
+
+// --- CEO cockpit (ARCHITECTURE.md section 4 - reads the sibling warehouse's
+// cockpit_alert table, see worker/src/lib/cockpitRepository.ts) ---
+
+export const AlertSeveritySchema = z.enum(["info", "warn", "critical"]);
+
+export const CockpitAlertSchema = z
+  .object({
+    id: z.string(),
+    agent: z.string(),
+    alertKey: z.string(),
+    severity: AlertSeveritySchema,
+    title: z.string(),
+    detail: z.string().nullable(),
+    detectedAt: z.string(),
+    acknowledgedAt: z.string().nullable(),
+  })
+  .openapi("CockpitAlert");
+
+export const YesterdayHealthSchema = z
+  .object({
+    orderCount: z.number().int(),
+    revenue: z.number(),
+    avgOrderValue: z.number(),
+    marginRatio: z.number().nullable(),
+  })
+  .openapi("YesterdayHealth");
+
+export const AdminCockpitResultSchema = z
+  .object({
+    health: YesterdayHealthSchema,
+    alerts: z.array(CockpitAlertSchema),
+  })
+  .openapi("AdminCockpitResult");
+
+export const AdminAlertResolveInputSchema = z
+  .object({
+    resolution: z.string().min(1).max(500).optional().openapi({
+      description: "Free-text note on how this was resolved. Defaults to 'manual'.",
+    }),
+  })
+  .openapi("AdminAlertResolveInput");

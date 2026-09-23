@@ -59,6 +59,14 @@ export type AppConfig = {
   // start - local dev doesn't need the warehouse database running just to
   // work on orders.
   readonly warehouseDatabaseUrl?: string;
+  // A THIRD, narrower cross-repo connection into the same warehouse
+  // database, as the warehouse_cockpit_writer role (UPDATE-only on
+  // cockpit_alert, never SELECT-everything like warehouse_reader above) -
+  // powers ONLY the admin cockpit page's acknowledge/resolve actions (see
+  // cockpitRepository.ts). Deliberately not reused from
+  // warehouseDatabaseUrl: a bug in the cockpit UI must not be able to
+  // write anything but that one table, even by accident.
+  readonly warehouseCockpitDatabaseUrl?: string;
 };
 
 /** Reads a required var; throws ConfigError with an actionable message if unset. */
@@ -114,6 +122,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     sentryDsn: optional(env, "SENTRY_DSN"),
     sentryEnvironment: optional(env, "SENTRY_ENVIRONMENT") ?? "development",
     warehouseDatabaseUrl: optional(env, "WAREHOUSE_DATABASE_URL"),
+    warehouseCockpitDatabaseUrl: optional(env, "WAREHOUSE_COCKPIT_DATABASE_URL"),
   });
 }
 

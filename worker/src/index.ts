@@ -2,7 +2,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { cors } from "hono/cors";
 import * as Sentry from "@sentry/node";
 import { config } from "./config";
-import { pool, warehousePool, isUniqueViolation } from "./db";
+import { pool, warehousePool, warehouseCockpitPool, isUniqueViolation } from "./db";
 import { MENU } from "./data";
 import {
   hashPassword,
@@ -51,6 +51,10 @@ import { createPostgresOrdersRepository } from "./lib/ordersRepository";
 import { createPostgresOtpRepository } from "./lib/otpRepository";
 import { createPostgresPasswordResetTokensRepository } from "./lib/passwordResetTokensRepository";
 import { createPostgresReportingRepository } from "./lib/reportingRepository";
+import {
+  createPostgresCockpitReadRepository,
+  createPostgresCockpitWriteRepository,
+} from "./lib/cockpitRepository";
 import { createPostgresSessionsRepository } from "./lib/sessionsRepository";
 import {
   handleTelegramWebhookBody,
@@ -60,7 +64,9 @@ import {
   secureCompare,
 } from "./lib/telegram";
 import {
+  AdminAlertResolveInputSchema,
   AdminAuthResultSchema,
+  AdminCockpitResultSchema,
   AdminCustomerSearchQuerySchema,
   AdminCustomerSearchResultSchema,
   AdminDiscountInputSchema,
@@ -113,6 +119,17 @@ const eventsRepository = createPostgresEventsRepository(pool);
 // at startup over an integration nothing else in this app depends on.
 const reportingRepository = warehousePool
   ? createPostgresReportingRepository(warehousePool)
+  : undefined;
+// Same split-role reasoning, one level narrower: the cockpit's read side
+// reuses warehousePool (warehouse_reader, SELECT-only everywhere); its
+// write side (acknowledge/resolve) needs its OWN pool because
+// warehouse_reader structurally cannot UPDATE anything - see db.ts's
+// warehouseCockpitPool comment.
+const cockpitReadRepository = warehousePool
+  ? createPostgresCockpitReadRepository(warehousePool)
+  : undefined;
+const cockpitWriteRepository = warehouseCockpitPool
+  ? createPostgresCockpitWriteRepository(warehouseCockpitPool)
   : undefined;
 registerEmailNotifications(ordersRepository);
 registerTelegramNotifications(ordersRepository);
@@ -996,6 +1013,8 @@ v1Admin.use("/customers/*", requireAdminAuth(adminSessionsRepository));
 v1Admin.use("/me", requireAdminAuth(adminSessionsRepository));
 v1Admin.use("/logout", requireAdminAuth(adminSessionsRepository));
 v1Admin.use("/reporting", requireAdminAuth(adminSessionsRepository));
+v1Admin.use("/cockpit", requireAdminAuth(adminSessionsRepository));
+v1Admin.use("/cockpit/*", requireAdminAuth(adminSessionsRepository));
 
 v1Admin.openAPIRegistry.registerComponent("securitySchemes", "adminBearerAuth", {
   type: "http",
@@ -1250,6 +1269,112 @@ v1Admin.openapi(adminReportingRoute, async (c) => {
     },
     200,
   );
+});
+
+const adminCockpitRoute = createRoute({
+  method: "get",
+  path: "/cockpit",
+  operationId: "adminCockpit",
+  summary: "CEO cockpit: yesterday's health + open problem alerts (ARCHITECTURE.md section 4)",
+  security: [{ adminBearerAuth: [] }],
+  responses: {
+    200: {
+      content: { "application/json": { schema: AdminCockpitResultSchema } },
+      description: "Yesterday's health summary + every open cockpit_alert.",
+    },
+    503: {
+      content: { "application/json": { schema: ErrorResponseSchema } },
+      description: "WAREHOUSE_DATABASE_URL isn't configured on this deployment.",
+    },
+  },
+});
+v1Admin.openapi(adminCockpitRoute, async (c) => {
+  if (!cockpitReadRepository) {
+    return c.json(
+      { error: "reporting_not_configured", message: "WAREHOUSE_DATABASE_URL is not set." },
+      503,
+    );
+  }
+  const [health, alerts] = await Promise.all([
+    cockpitReadRepository.getYesterdayHealth(),
+    cockpitReadRepository.getOpenAlerts(),
+  ]);
+  return c.json({ health, alerts }, 200);
+});
+
+const adminAcknowledgeAlertRoute = createRoute({
+  method: "patch",
+  path: "/cockpit/alerts/{id}/acknowledge",
+  operationId: "adminAcknowledgeAlert",
+  summary: "Acknowledge a cockpit alert (ARCHITECTURE.md section 4.2)",
+  security: [{ adminBearerAuth: [] }],
+  request: { params: z.object({ id: z.string() }) },
+  responses: {
+    204: { description: "Acknowledged." },
+    404: {
+      content: { "application/json": { schema: ErrorResponseSchema } },
+      description: "No such open, unacknowledged alert.",
+    },
+    503: {
+      content: { "application/json": { schema: ErrorResponseSchema } },
+      description: "WAREHOUSE_COCKPIT_DATABASE_URL isn't configured on this deployment.",
+    },
+  },
+});
+v1Admin.openapi(adminAcknowledgeAlertRoute, async (c) => {
+  if (!cockpitWriteRepository) {
+    return c.json(
+      { error: "reporting_not_configured", message: "WAREHOUSE_COCKPIT_DATABASE_URL is not set." },
+      503,
+    );
+  }
+  const { id } = c.req.valid("param");
+  const ok = await cockpitWriteRepository.acknowledgeAlert(id);
+  if (!ok) {
+    return c.json({ error: "not_found", message: "No such open, unacknowledged alert." }, 404);
+  }
+  return c.body(null, 204);
+});
+
+const adminResolveAlertRoute = createRoute({
+  method: "patch",
+  path: "/cockpit/alerts/{id}/resolve",
+  operationId: "adminResolveAlert",
+  summary: "Manually resolve a cockpit alert (ARCHITECTURE.md section 4.2)",
+  security: [{ adminBearerAuth: [] }],
+  request: {
+    params: z.object({ id: z.string() }),
+    body: {
+      required: false,
+      content: { "application/json": { schema: AdminAlertResolveInputSchema } },
+    },
+  },
+  responses: {
+    204: { description: "Resolved." },
+    404: {
+      content: { "application/json": { schema: ErrorResponseSchema } },
+      description: "No such open alert.",
+    },
+    503: {
+      content: { "application/json": { schema: ErrorResponseSchema } },
+      description: "WAREHOUSE_COCKPIT_DATABASE_URL isn't configured on this deployment.",
+    },
+  },
+});
+v1Admin.openapi(adminResolveAlertRoute, async (c) => {
+  if (!cockpitWriteRepository) {
+    return c.json(
+      { error: "reporting_not_configured", message: "WAREHOUSE_COCKPIT_DATABASE_URL is not set." },
+      503,
+    );
+  }
+  const { id } = c.req.valid("param");
+  const { resolution } = c.req.valid("json") ?? {};
+  const ok = await cockpitWriteRepository.resolveAlert(id, resolution?.trim() || "manual");
+  if (!ok) {
+    return c.json({ error: "not_found", message: "No such open alert." }, 404);
+  }
+  return c.body(null, 204);
 });
 
 // Staff order entry: a phone/WhatsApp customer may not have an email or

@@ -77,6 +77,12 @@ function AdminChrome() {
             >
               Reporting
             </Link>
+            <Link
+              to="/admin/cockpit"
+              className="font-sans text-sm text-muted-foreground hover:text-foreground data-[status=active]:text-foreground data-[status=active]:font-medium"
+            >
+              Cockpit
+            </Link>
           </nav>
           <div className="flex items-center gap-3">
             <span className="font-sans text-sm text-muted-foreground">{adminUser.name}</span>
