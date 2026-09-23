@@ -7,7 +7,7 @@ import type { Pool } from "pg";
  * Split into a read side and a write side on purpose, each over its OWN
  * Postgres connection (see db.ts's warehousePool/warehouseCockpitPool):
  * reads go through warehouse_reader (SELECT-only, everywhere), writes go
- * through warehouse_cockpit_writer (UPDATE-only, cockpit_alert only) - a
+ * through warehouse_cockpit_writer (SELECT+UPDATE-only, cockpit_alert only) - a
  * bug in either function still can't reach past what that function's own
  * role structurally allows.
  *

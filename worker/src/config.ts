@@ -60,7 +60,7 @@ export type AppConfig = {
   // work on orders.
   readonly warehouseDatabaseUrl?: string;
   // A THIRD, narrower cross-repo connection into the same warehouse
-  // database, as the warehouse_cockpit_writer role (UPDATE-only on
+  // database, as the warehouse_cockpit_writer role (SELECT+UPDATE-only on
   // cockpit_alert, never SELECT-everything like warehouse_reader above) -
   // powers ONLY the admin cockpit page's acknowledge/resolve actions (see
   // cockpitRepository.ts). Deliberately not reused from

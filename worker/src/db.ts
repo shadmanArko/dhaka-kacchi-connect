@@ -28,7 +28,7 @@ warehousePool?.on("error", (err) => {
 });
 
 // A THIRD pool, same physical database as warehousePool but connecting as
-// warehouse_cockpit_writer (UPDATE-only on cockpit_alert) rather than
+// warehouse_cockpit_writer (SELECT+UPDATE-only on cockpit_alert) rather than
 // warehouse_reader - powers only the admin cockpit page's acknowledge/
 // resolve actions (cockpitRepository.ts). Kept as its own Pool rather than
 // widening warehousePool's role: a bug in the cockpit UI must not be able
