@@ -50,6 +50,15 @@ export type AppConfig = {
   // dev exception from a real production one. Defaults to "development";
   // set to "production" in deploy/.env.
   readonly sentryEnvironment: string;
+  // Read-only cross-repo connection into the sibling dhaka_kacchi_ai_harness
+  // warehouse database (as the warehouse_reader role - never warehouse_app),
+  // the mirror image of that repo's own ORDERING_DATABASE_URL/
+  // ordering_reader. Powers the admin reporting page only - see
+  // reportingRepository.ts. Optional like the other integrations above:
+  // unset means the reporting routes answer 503, not that the app fails to
+  // start - local dev doesn't need the warehouse database running just to
+  // work on orders.
+  readonly warehouseDatabaseUrl?: string;
 };
 
 /** Reads a required var; throws ConfigError with an actionable message if unset. */
@@ -104,6 +113,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     telegramWebhookSecret: optional(env, "TELEGRAM_WEBHOOK_SECRET"),
     sentryDsn: optional(env, "SENTRY_DSN"),
     sentryEnvironment: optional(env, "SENTRY_ENVIRONMENT") ?? "development",
+    warehouseDatabaseUrl: optional(env, "WAREHOUSE_DATABASE_URL"),
   });
 }
 

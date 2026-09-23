@@ -2,7 +2,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { cors } from "hono/cors";
 import * as Sentry from "@sentry/node";
 import { config } from "./config";
-import { pool, isUniqueViolation } from "./db";
+import { pool, warehousePool, isUniqueViolation } from "./db";
 import { MENU } from "./data";
 import {
   hashPassword,
@@ -50,6 +50,7 @@ import { OrderValidationError, priceOrder, totalCents, type OrderRecord } from "
 import { createPostgresOrdersRepository } from "./lib/ordersRepository";
 import { createPostgresOtpRepository } from "./lib/otpRepository";
 import { createPostgresPasswordResetTokensRepository } from "./lib/passwordResetTokensRepository";
+import { createPostgresReportingRepository } from "./lib/reportingRepository";
 import { createPostgresSessionsRepository } from "./lib/sessionsRepository";
 import {
   handleTelegramWebhookBody,
@@ -70,6 +71,7 @@ import {
   AdminOrderListResponseSchema,
   AdminOrderResultSchema,
   AdminOrderUpdateInputSchema,
+  AdminReportingResultSchema,
   AdminStatusInputSchema,
   AuthResultSchema,
   DeliveryAddressSchema,
@@ -106,6 +108,12 @@ const passwordResetTokensRepository = createPostgresPasswordResetTokensRepositor
 const adminUsersRepository = createPostgresAdminUsersRepository(pool);
 const adminSessionsRepository = createPostgresAdminSessionsRepository(pool);
 const eventsRepository = createPostgresEventsRepository(pool);
+// undefined when WAREHOUSE_DATABASE_URL isn't set (local dev, most likely)
+// - the reporting routes below check for this and answer 503, never crash
+// at startup over an integration nothing else in this app depends on.
+const reportingRepository = warehousePool
+  ? createPostgresReportingRepository(warehousePool)
+  : undefined;
 registerEmailNotifications(ordersRepository);
 registerTelegramNotifications(ordersRepository);
 
@@ -987,6 +995,7 @@ v1Admin.use("/orders/*", requireAdminAuth(adminSessionsRepository));
 v1Admin.use("/customers/*", requireAdminAuth(adminSessionsRepository));
 v1Admin.use("/me", requireAdminAuth(adminSessionsRepository));
 v1Admin.use("/logout", requireAdminAuth(adminSessionsRepository));
+v1Admin.use("/reporting", requireAdminAuth(adminSessionsRepository));
 
 v1Admin.openAPIRegistry.registerComponent("securitySchemes", "adminBearerAuth", {
   type: "http",
@@ -1184,6 +1193,63 @@ v1Admin.openapi(adminCustomerSearchRoute, async (c) => {
   const { identifier } = c.req.valid("query");
   const found = await customersRepository.findByPhoneOrEmail(identifier.trim().toLowerCase());
   return c.json({ customer: found ? toPublicCustomer(found) : null }, 200);
+});
+
+// The platform totals in socialPlatformSummary already cover full history -
+// this list is only "what's recent," so a small window is deliberate, not
+// a missing paginate-everything feature.
+const RECENT_SOCIAL_POSTS_LIMIT = 30;
+
+const adminReportingRoute = createRoute({
+  method: "get",
+  path: "/reporting",
+  operationId: "adminReporting",
+  summary: "Marketing attribution + organic social reporting (reads the sibling warehouse)",
+  security: [{ adminBearerAuth: [] }],
+  responses: {
+    200: {
+      content: { "application/json": { schema: AdminReportingResultSchema } },
+      description: "Aggregated social/channel/attribution data from the warehouse.",
+    },
+    503: {
+      content: { "application/json": { schema: ErrorResponseSchema } },
+      description: "WAREHOUSE_DATABASE_URL isn't configured on this deployment.",
+    },
+  },
+});
+v1Admin.openapi(adminReportingRoute, async (c) => {
+  if (!reportingRepository) {
+    return c.json(
+      { error: "reporting_not_configured", message: "WAREHOUSE_DATABASE_URL is not set." },
+      503,
+    );
+  }
+  // All four independent reads, run concurrently - none depends on
+  // another's result, and this is one admin page load, not a hot path
+  // shared with anything customer-facing.
+  const [
+    socialPlatformSummary,
+    recentSocialPosts,
+    channelFunnel,
+    channelRevenue,
+    attributionCoverage,
+  ] = await Promise.all([
+    reportingRepository.getSocialPlatformSummary(),
+    reportingRepository.getRecentSocialPosts(RECENT_SOCIAL_POSTS_LIMIT),
+    reportingRepository.getChannelFunnel(),
+    reportingRepository.getChannelRevenue(),
+    reportingRepository.getAttributionCoverage(),
+  ]);
+  return c.json(
+    {
+      socialPlatformSummary,
+      recentSocialPosts,
+      channelFunnel,
+      channelRevenue,
+      attributionCoverage,
+    },
+    200,
+  );
 });
 
 // Staff order entry: a phone/WhatsApp customer may not have an email or

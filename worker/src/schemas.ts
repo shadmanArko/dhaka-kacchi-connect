@@ -482,3 +482,76 @@ export const AdminOrderUpdateInputSchema = z
     }),
   })
   .openapi("AdminOrderUpdateInput");
+
+// --- Reporting (read-only view over the sibling warehouse database - see
+// worker/src/lib/reportingRepository.ts) ---
+
+export const SocialPlatformSummarySchema = z
+  .object({
+    platform: z.string(),
+    postCount: z.number().int(),
+    totalLikes: z.number().int(),
+    totalComments: z.number().int(),
+    totalShares: z.number().int(),
+    totalImpressions: z.number().int(),
+    totalReach: z.number().int(),
+  })
+  .openapi("SocialPlatformSummary");
+
+export const RecentSocialPostSchema = z
+  .object({
+    platform: z.string(),
+    externalId: z.string(),
+    postedAt: z.string(),
+    permalink: z.string().nullable(),
+    contentType: z.string().nullable(),
+    caption: z.string().nullable(),
+    likes: z.number().int(),
+    comments: z.number().int(),
+    shares: z.number().int(),
+    impressions: z.number().int(),
+    reach: z.number().int(),
+  })
+  .openapi("RecentSocialPost");
+
+export const ChannelFunnelRowSchema = z
+  .object({
+    channel: z.string(),
+    campaign: z.string(),
+    eventName: z.string(),
+    eventCount: z.number().int(),
+  })
+  .openapi("ChannelFunnelRow");
+
+export const ChannelRevenueRowSchema = z
+  .object({
+    channel: z.string(),
+    campaign: z.string(),
+    purchaseEvents: z.number().int(),
+    matchedOrders: z.number().int(),
+    // A warehouse numeric(12,2) - passed through as a number, same
+    // precision loss tradeoff as every other money value already crossing
+    // this JSON boundary in this codebase (see AdminOrder's own *Cents
+    // fields for the integer-cents alternative used on the app's own
+    // money; this is genuinely a different repo's numeric type, not this
+    // one's, so it's read as-is rather than reinvented here).
+    grossRevenue: z.number(),
+  })
+  .openapi("ChannelRevenueRow");
+
+export const AttributionCoverageSchema = z
+  .object({
+    attributed: z.number().int(),
+    unattributed: z.number().int(),
+  })
+  .openapi("AttributionCoverage");
+
+export const AdminReportingResultSchema = z
+  .object({
+    socialPlatformSummary: z.array(SocialPlatformSummarySchema),
+    recentSocialPosts: z.array(RecentSocialPostSchema),
+    channelFunnel: z.array(ChannelFunnelRowSchema),
+    channelRevenue: z.array(ChannelRevenueRowSchema),
+    attributionCoverage: AttributionCoverageSchema,
+  })
+  .openapi("AdminReportingResult");

@@ -11,6 +11,22 @@ pool.on("error", (err) => {
   console.error("Unexpected error on idle Postgres client:", err);
 });
 
+// Separate pool, separate database, separate role (warehouse_reader) - a
+// second Postgres instance conceptually, even though it happens to share a
+// host on the VPS. `pool` above must never be able to touch the warehouse
+// database and vice versa - see config.ts's warehouseDatabaseUrl comment.
+// Undefined (not a Pool that immediately fails) when unset, so nothing that
+// doesn't use reportingRepository.ts ever notices - see that file for the
+// only consumer.
+export const warehousePool = config.warehouseDatabaseUrl
+  ? new Pool({ connectionString: config.warehouseDatabaseUrl })
+  : undefined;
+
+warehousePool?.on("error", (err) => {
+  Sentry.captureException(err);
+  console.error("Unexpected error on idle warehouse Postgres client:", err);
+});
+
 /**
  * Runs `fn` inside one BEGIN/COMMIT transaction, ROLLBACK on any error -
  * the Postgres equivalent of the atomicity D1's `.batch([...])` gave

@@ -312,6 +312,58 @@ export type AdminOrderListFilters = {
   search?: string;
 };
 
+// --- Admin reporting (reads the sibling dhaka_kacchi_ai_harness warehouse -
+// see worker/src/lib/reportingRepository.ts. May be entirely absent
+// (WAREHOUSE_DATABASE_URL unset) - the getReporting() call below surfaces
+// that as an ordinary 503 apiFetch error, not a special case here. ---
+
+export type SocialPlatformSummary = {
+  platform: string;
+  postCount: number;
+  totalLikes: number;
+  totalComments: number;
+  totalShares: number;
+  totalImpressions: number;
+  totalReach: number;
+};
+
+export type RecentSocialPost = {
+  platform: string;
+  externalId: string;
+  postedAt: string;
+  permalink: string | null;
+  contentType: string | null;
+  caption: string | null;
+  likes: number;
+  comments: number;
+  shares: number;
+  impressions: number;
+  reach: number;
+};
+
+export type ChannelFunnelRow = {
+  channel: string;
+  campaign: string;
+  eventName: string;
+  eventCount: number;
+};
+
+export type ChannelRevenueRow = {
+  channel: string;
+  campaign: string;
+  purchaseEvents: number;
+  matchedOrders: number;
+  grossRevenue: number;
+};
+
+export type AdminReportingResult = {
+  socialPlatformSummary: SocialPlatformSummary[];
+  recentSocialPosts: RecentSocialPost[];
+  channelFunnel: ChannelFunnelRow[];
+  channelRevenue: ChannelRevenueRow[];
+  attributionCoverage: { attributed: number; unattributed: number };
+};
+
 // Only required when the order isn't for an existing customer - a phone/
 // WhatsApp order realistically may not come with an email or DOB, so both
 // are optional here (the backend fills in a placeholder - see
@@ -481,6 +533,8 @@ export const adminApi = {
       `/v1/admin/customers/search${buildQuery({ identifier })}`,
       { headers: authHeader(token) },
     ),
+  getReporting: (token: string) =>
+    apiFetch<AdminReportingResult>("/v1/admin/reporting", { headers: authHeader(token) }),
   createOrder: (token: string, input: AdminOrderInput) =>
     apiFetch<{ order: AdminOrder }>(
       "/v1/admin/orders",

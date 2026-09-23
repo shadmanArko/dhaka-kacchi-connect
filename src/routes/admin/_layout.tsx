@@ -1,4 +1,4 @@
-import { createFileRoute, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { AdminSessionProvider, useAdminSession } from "@/hooks/useAdminSession";
 import { Toaster } from "@/components/ui/sonner";
@@ -62,7 +62,22 @@ function AdminChrome() {
     <div className="min-h-screen bg-background text-foreground">
       {adminUser && (
         <header className="flex items-center justify-between border-b border-border px-4 py-3 sm:px-6">
-          <span className="font-sans text-sm font-medium">Dhaka Kacchi — Admin</span>
+          <nav className="flex items-center gap-4">
+            <span className="font-sans text-sm font-medium">Dhaka Kacchi — Admin</span>
+            <Link
+              to="/admin"
+              search={{ order: undefined }}
+              className="font-sans text-sm text-muted-foreground hover:text-foreground data-[status=active]:text-foreground data-[status=active]:font-medium"
+            >
+              Orders
+            </Link>
+            <Link
+              to="/admin/reporting"
+              className="font-sans text-sm text-muted-foreground hover:text-foreground data-[status=active]:text-foreground data-[status=active]:font-medium"
+            >
+              Reporting
+            </Link>
+          </nav>
           <div className="flex items-center gap-3">
             <span className="font-sans text-sm text-muted-foreground">{adminUser.name}</span>
             <Button variant="outline" size="sm" onClick={logout}>
