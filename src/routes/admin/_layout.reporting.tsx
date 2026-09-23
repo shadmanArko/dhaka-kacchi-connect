@@ -181,10 +181,11 @@ function AdminReportingPage() {
               </CardHeader>
               <CardContent className="space-y-1 font-sans text-sm text-muted-foreground">
                 <p>{p.postCount} posts</p>
+                {p.totalImpressions > 0 && <p>{p.totalImpressions.toLocaleString()} impressions</p>}
+                {p.totalReach > 0 && <p>{p.totalReach.toLocaleString()} reach</p>}
                 <p>{p.totalLikes.toLocaleString()} likes</p>
                 <p>{p.totalComments.toLocaleString()} comments</p>
                 <p>{p.totalShares.toLocaleString()} shares</p>
-                {p.totalImpressions > 0 && <p>{p.totalImpressions.toLocaleString()} impressions</p>}
               </CardContent>
             </Card>
           ))}
@@ -221,6 +222,22 @@ function AdminReportingPage() {
                 onSort={posts.requestSort}
               />
               <TableHead>Caption</TableHead>
+              <SortableHead
+                label="Impressions"
+                column="impressions"
+                sortKey={posts.sortKey}
+                direction={posts.direction}
+                onSort={posts.requestSort}
+                align="right"
+              />
+              <SortableHead
+                label="Reach"
+                column="reach"
+                sortKey={posts.sortKey}
+                direction={posts.direction}
+                onSort={posts.requestSort}
+                align="right"
+              />
               <SortableHead
                 label="Likes"
                 column="likes"
@@ -267,6 +284,12 @@ function AdminReportingPage() {
                     (post.caption ?? "—")
                   )}
                 </TableCell>
+                <TableCell className="text-right">
+                  {post.impressions > 0 ? post.impressions.toLocaleString() : "—"}
+                </TableCell>
+                <TableCell className="text-right">
+                  {post.reach > 0 ? post.reach.toLocaleString() : "—"}
+                </TableCell>
                 <TableCell className="text-right">{post.likes.toLocaleString()}</TableCell>
                 <TableCell className="text-right">{post.comments.toLocaleString()}</TableCell>
                 <TableCell className="text-right">{post.shares.toLocaleString()}</TableCell>
@@ -274,7 +297,7 @@ function AdminReportingPage() {
             ))}
             {posts.sorted.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground">
+                <TableCell colSpan={9} className="text-center text-muted-foreground">
                   No posts yet.
                 </TableCell>
               </TableRow>
