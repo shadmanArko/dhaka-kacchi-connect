@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { adminApi, ApiError, type AdminReportingResult } from "@/lib/api";
 import { useAdminSession } from "@/hooks/useAdminSession";
@@ -12,6 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/admin/_layout/reporting")({
   head: () => ({ meta: [{ title: "Reporting — Dhaka Kacchi Admin" }] }),
@@ -28,6 +29,80 @@ function formatDate(iso: string): string {
     month: "short",
     year: "numeric",
   });
+}
+
+type SortDirection = "asc" | "desc";
+
+/**
+ * Generic client-side table sort - every reporting table here is small
+ * (dozens to a few hundred rows, already capped server-side), so there's no
+ * need for server-side sorting/pagination. `key` is nullable so a table can
+ * start unsorted (server order - most recent first for posts, GROUP BY
+ * order for the aggregate tables).
+ */
+function useSort<T>(rows: T[], initialKey: keyof T | null = null) {
+  const [sortKey, setSortKey] = useState<keyof T | null>(initialKey);
+  const [direction, setDirection] = useState<SortDirection>("asc");
+
+  function requestSort(key: keyof T) {
+    if (key === sortKey) {
+      setDirection((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      // Numbers default to descending first click (biggest first is almost
+      // always what "sort by likes" means); strings/dates default ascending.
+      setDirection(typeof rows[0]?.[key] === "number" ? "desc" : "asc");
+    }
+  }
+
+  const sorted = useMemo(() => {
+    if (!sortKey) return rows;
+    const sign = direction === "asc" ? 1 : -1;
+    return [...rows].sort((a, b) => {
+      const av = a[sortKey];
+      const bv = b[sortKey];
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1; // nulls last regardless of direction
+      if (bv == null) return -1;
+      if (typeof av === "number" && typeof bv === "number") return (av - bv) * sign;
+      return String(av).localeCompare(String(bv)) * sign;
+    });
+  }, [rows, sortKey, direction]);
+
+  return { sorted, sortKey, direction, requestSort };
+}
+
+function SortableHead<T>({
+  label,
+  column,
+  sortKey,
+  direction,
+  onSort,
+  align = "left",
+}: {
+  label: string;
+  column: keyof T;
+  sortKey: keyof T | null;
+  direction: SortDirection;
+  onSort: (column: keyof T) => void;
+  align?: "left" | "right";
+}) {
+  const active = sortKey === column;
+  return (
+    <TableHead
+      className={cn(
+        "cursor-pointer select-none whitespace-nowrap hover:text-foreground",
+        align === "right" && "text-right",
+      )}
+      onClick={() => onSort(column)}
+      aria-sort={active ? (direction === "asc" ? "ascending" : "descending") : "none"}
+    >
+      {label}
+      <span className="ml-1 inline-block w-3 text-xs">
+        {active ? (direction === "asc" ? "▲" : "▼") : ""}
+      </span>
+    </TableHead>
+  );
 }
 
 function AdminReportingPage() {
@@ -59,6 +134,10 @@ function AdminReportingPage() {
     };
   }, [session.token, retryCount]);
 
+  const posts = useSort(data?.recentSocialPosts ?? []);
+  const funnel = useSort(data?.channelFunnel ?? []);
+  const revenue = useSort(data?.channelRevenue ?? []);
+
   if (loadState === "loading") {
     return <p className="font-sans text-sm text-muted-foreground">Loading…</p>;
   }
@@ -86,13 +165,7 @@ function AdminReportingPage() {
     );
   }
 
-  const {
-    socialPlatformSummary,
-    recentSocialPosts,
-    channelFunnel,
-    channelRevenue,
-    attributionCoverage,
-  } = data;
+  const { socialPlatformSummary, attributionCoverage } = data;
 
   return (
     <div className="space-y-8">
@@ -126,17 +199,56 @@ function AdminReportingPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Platform</TableHead>
-              <TableHead>Posted</TableHead>
-              <TableHead>Type</TableHead>
+              <SortableHead
+                label="Platform"
+                column="platform"
+                sortKey={posts.sortKey}
+                direction={posts.direction}
+                onSort={posts.requestSort}
+              />
+              <SortableHead
+                label="Posted"
+                column="postedAt"
+                sortKey={posts.sortKey}
+                direction={posts.direction}
+                onSort={posts.requestSort}
+              />
+              <SortableHead
+                label="Type"
+                column="contentType"
+                sortKey={posts.sortKey}
+                direction={posts.direction}
+                onSort={posts.requestSort}
+              />
               <TableHead>Caption</TableHead>
-              <TableHead className="text-right">Likes</TableHead>
-              <TableHead className="text-right">Comments</TableHead>
-              <TableHead className="text-right">Shares</TableHead>
+              <SortableHead
+                label="Likes"
+                column="likes"
+                sortKey={posts.sortKey}
+                direction={posts.direction}
+                onSort={posts.requestSort}
+                align="right"
+              />
+              <SortableHead
+                label="Comments"
+                column="comments"
+                sortKey={posts.sortKey}
+                direction={posts.direction}
+                onSort={posts.requestSort}
+                align="right"
+              />
+              <SortableHead
+                label="Shares"
+                column="shares"
+                sortKey={posts.sortKey}
+                direction={posts.direction}
+                onSort={posts.requestSort}
+                align="right"
+              />
             </TableRow>
           </TableHeader>
           <TableBody>
-            {recentSocialPosts.map((post) => (
+            {posts.sorted.map((post) => (
               <TableRow key={`${post.platform}-${post.externalId}`}>
                 <TableCell className="capitalize">{post.platform}</TableCell>
                 <TableCell>{formatDate(post.postedAt)}</TableCell>
@@ -160,7 +272,7 @@ function AdminReportingPage() {
                 <TableCell className="text-right">{post.shares.toLocaleString()}</TableCell>
               </TableRow>
             ))}
-            {recentSocialPosts.length === 0 && (
+            {posts.sorted.length === 0 && (
               <TableRow>
                 <TableCell colSpan={7} className="text-center text-muted-foreground">
                   No posts yet.
@@ -182,14 +294,39 @@ function AdminReportingPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Channel</TableHead>
-              <TableHead>Campaign</TableHead>
-              <TableHead>Event</TableHead>
-              <TableHead className="text-right">Count</TableHead>
+              <SortableHead
+                label="Channel"
+                column="channel"
+                sortKey={funnel.sortKey}
+                direction={funnel.direction}
+                onSort={funnel.requestSort}
+              />
+              <SortableHead
+                label="Campaign"
+                column="campaign"
+                sortKey={funnel.sortKey}
+                direction={funnel.direction}
+                onSort={funnel.requestSort}
+              />
+              <SortableHead
+                label="Event"
+                column="eventName"
+                sortKey={funnel.sortKey}
+                direction={funnel.direction}
+                onSort={funnel.requestSort}
+              />
+              <SortableHead
+                label="Count"
+                column="eventCount"
+                sortKey={funnel.sortKey}
+                direction={funnel.direction}
+                onSort={funnel.requestSort}
+                align="right"
+              />
             </TableRow>
           </TableHeader>
           <TableBody>
-            {channelFunnel.map((row) => (
+            {funnel.sorted.map((row) => (
               <TableRow key={`${row.channel}-${row.campaign}-${row.eventName}`}>
                 <TableCell>{row.channel}</TableCell>
                 <TableCell>{row.campaign}</TableCell>
@@ -197,7 +334,7 @@ function AdminReportingPage() {
                 <TableCell className="text-right">{row.eventCount.toLocaleString()}</TableCell>
               </TableRow>
             ))}
-            {channelFunnel.length === 0 && (
+            {funnel.sorted.length === 0 && (
               <TableRow>
                 <TableCell colSpan={4} className="text-center text-muted-foreground">
                   No attributed website visits yet — check that a bio link with
@@ -219,15 +356,48 @@ function AdminReportingPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Channel</TableHead>
-              <TableHead>Campaign</TableHead>
-              <TableHead className="text-right">Purchase events</TableHead>
-              <TableHead className="text-right">Matched orders</TableHead>
-              <TableHead className="text-right">Gross revenue</TableHead>
+              <SortableHead
+                label="Channel"
+                column="channel"
+                sortKey={revenue.sortKey}
+                direction={revenue.direction}
+                onSort={revenue.requestSort}
+              />
+              <SortableHead
+                label="Campaign"
+                column="campaign"
+                sortKey={revenue.sortKey}
+                direction={revenue.direction}
+                onSort={revenue.requestSort}
+              />
+              <SortableHead
+                label="Purchase events"
+                column="purchaseEvents"
+                sortKey={revenue.sortKey}
+                direction={revenue.direction}
+                onSort={revenue.requestSort}
+                align="right"
+              />
+              <SortableHead
+                label="Matched orders"
+                column="matchedOrders"
+                sortKey={revenue.sortKey}
+                direction={revenue.direction}
+                onSort={revenue.requestSort}
+                align="right"
+              />
+              <SortableHead
+                label="Gross revenue"
+                column="grossRevenue"
+                sortKey={revenue.sortKey}
+                direction={revenue.direction}
+                onSort={revenue.requestSort}
+                align="right"
+              />
             </TableRow>
           </TableHeader>
           <TableBody>
-            {channelRevenue.map((row) => (
+            {revenue.sorted.map((row) => (
               <TableRow key={`${row.channel}-${row.campaign}`}>
                 <TableCell>{row.channel}</TableCell>
                 <TableCell>{row.campaign}</TableCell>
@@ -236,7 +406,7 @@ function AdminReportingPage() {
                 <TableCell className="text-right">{EUR.format(row.grossRevenue)}</TableCell>
               </TableRow>
             ))}
-            {channelRevenue.length === 0 && (
+            {revenue.sorted.length === 0 && (
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-muted-foreground">
                   No attributed purchases yet.
