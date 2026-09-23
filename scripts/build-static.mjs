@@ -49,6 +49,7 @@ const ROUTES = [
   "/admin/orders/new",
   "/admin/reporting",
   "/admin/cockpit",
+  "/admin/post-predict",
   // Every locale in src/lib/i18n.ts's SUPPORTED_LOCALES, prefixed onto the
   // subset of ROUTES above that's actually translated (src/routes/$locale/
   // has one file per entry here - see that directory for the full list).

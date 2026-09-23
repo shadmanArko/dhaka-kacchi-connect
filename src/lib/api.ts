@@ -393,6 +393,33 @@ export type AdminCockpitResult = {
   alerts: CockpitAlert[];
 };
 
+// --- Post-engagement predictor (sibling dhaka_kacchi_ai_harness repo's
+// predictor/ service - ml/00-problem-framing through ml/05-production for
+// how the model was built, compared against baselines, and chosen). Same
+// possibly-absent-deployment shape as reporting/cockpit above: a 503 means
+// the deployment doesn't have PREDICTOR_URL configured, not that anything
+// is broken. ---
+
+export type PredictPostInput = {
+  platform: "facebook" | "instagram";
+  contentType?: string;
+  caption: string;
+  plannedPostedAt: string;
+};
+
+export type PredictReason = {
+  feature: string;
+  contribution: number;
+};
+
+export type PredictPostResult = {
+  label: "likely_below_typical" | "likely_at_or_above_typical";
+  probability: number;
+  threshold: number;
+  modelVersion: string;
+  topReasons: PredictReason[];
+};
+
 // Only required when the order isn't for an existing customer - a phone/
 // WhatsApp order realistically may not come with an email or DOB, so both
 // are optional here (the backend fills in a placeholder - see
@@ -576,6 +603,12 @@ export const adminApi = {
       method: "PATCH",
       headers: authHeader(token),
       body: JSON.stringify({ resolution }),
+    }),
+  predictPost: (token: string, input: PredictPostInput) =>
+    apiFetch<PredictPostResult>("/v1/admin/post-predict", {
+      method: "POST",
+      headers: authHeader(token),
+      body: JSON.stringify(input),
     }),
   createOrder: (token: string, input: AdminOrderInput) =>
     apiFetch<{ order: AdminOrder }>(

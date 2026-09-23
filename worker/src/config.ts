@@ -67,6 +67,14 @@ export type AppConfig = {
   // warehouseDatabaseUrl: a bug in the cockpit UI must not be able to
   // write anything but that one table, even by accident.
   readonly warehouseCockpitDatabaseUrl?: string;
+  // Base URL of the sibling dhaka_kacchi_ai_harness repo's internal-only
+  // post-engagement predictor service (see that repo's predictor/ -
+  // ml/00-problem-framing through ml/05-production for how the model was
+  // built and chosen). Reached over the docker-compose network in
+  // deploy/docker-compose.yml, e.g. http://predictor:8000 - never a public
+  // URL. Optional like the other integrations above: unset means the
+  // predictor admin route answers 503, not that the app fails to start.
+  readonly predictorUrl?: string;
 };
 
 /** Reads a required var; throws ConfigError with an actionable message if unset. */
@@ -123,6 +131,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     sentryEnvironment: optional(env, "SENTRY_ENVIRONMENT") ?? "development",
     warehouseDatabaseUrl: optional(env, "WAREHOUSE_DATABASE_URL"),
     warehouseCockpitDatabaseUrl: optional(env, "WAREHOUSE_COCKPIT_DATABASE_URL"),
+    predictorUrl: optional(env, "PREDICTOR_URL"),
   });
 }
 

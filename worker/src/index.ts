@@ -55,6 +55,7 @@ import {
   createPostgresCockpitReadRepository,
   createPostgresCockpitWriteRepository,
 } from "./lib/cockpitRepository";
+import { createHttpPredictorClient, PredictorServiceError } from "./lib/predictorClient";
 import { createPostgresSessionsRepository } from "./lib/sessionsRepository";
 import {
   handleTelegramWebhookBody,
@@ -65,6 +66,8 @@ import {
 } from "./lib/telegram";
 import {
   AdminAlertResolveInputSchema,
+  PredictPostInputSchema,
+  PredictPostResultSchema,
   AdminAuthResultSchema,
   AdminCockpitResultSchema,
   AdminCustomerSearchQuerySchema,
@@ -130,6 +133,12 @@ const cockpitReadRepository = warehousePool
   : undefined;
 const cockpitWriteRepository = warehouseCockpitPool
   ? createPostgresCockpitWriteRepository(warehouseCockpitPool)
+  : undefined;
+// undefined when PREDICTOR_URL isn't set (local dev, most likely) - the
+// predict route below checks for this and answers 503, same convention as
+// reportingRepository/cockpitReadRepository above.
+const predictorClient = config.predictorUrl
+  ? createHttpPredictorClient(config.predictorUrl)
   : undefined;
 registerEmailNotifications(ordersRepository);
 registerTelegramNotifications(ordersRepository);
@@ -1015,6 +1024,7 @@ v1Admin.use("/logout", requireAdminAuth(adminSessionsRepository));
 v1Admin.use("/reporting", requireAdminAuth(adminSessionsRepository));
 v1Admin.use("/cockpit", requireAdminAuth(adminSessionsRepository));
 v1Admin.use("/cockpit/*", requireAdminAuth(adminSessionsRepository));
+v1Admin.use("/post-predict", requireAdminAuth(adminSessionsRepository));
 
 v1Admin.openAPIRegistry.registerComponent("securitySchemes", "adminBearerAuth", {
   type: "http",
@@ -1375,6 +1385,63 @@ v1Admin.openapi(adminResolveAlertRoute, async (c) => {
     return c.json({ error: "not_found", message: "No such open alert." }, 404);
   }
   return c.body(null, 204);
+});
+
+const adminPostPredictRoute = createRoute({
+  method: "post",
+  path: "/post-predict",
+  operationId: "adminPostPredict",
+  summary:
+    "Predict whether a drafted, not-yet-published post will land above or below that " +
+    "platform's typical engagement (sibling dhaka_kacchi_ai_harness repo's predictor/ " +
+    "service - see ml/00-problem-framing through ml/05-production there for how the " +
+    "model was built, compared against baselines, and chosen).",
+  security: [{ adminBearerAuth: [] }],
+  request: {
+    body: { content: { "application/json": { schema: PredictPostInputSchema } } },
+  },
+  responses: {
+    200: {
+      content: { "application/json": { schema: PredictPostResultSchema } },
+      description: "The prediction, its probability, and the top contributing factors.",
+    },
+    400: {
+      content: { "application/json": { schema: ErrorResponseSchema } },
+      description: "The predictor service rejected the input (e.g. an unrecognized platform).",
+    },
+    502: {
+      content: { "application/json": { schema: ErrorResponseSchema } },
+      description: "The predictor service is unreachable or returned an unexpected error.",
+    },
+    503: {
+      content: { "application/json": { schema: ErrorResponseSchema } },
+      description: "PREDICTOR_URL isn't configured on this deployment.",
+    },
+  },
+});
+v1Admin.openapi(adminPostPredictRoute, async (c) => {
+  if (!predictorClient) {
+    return c.json({ error: "predictor_not_configured", message: "PREDICTOR_URL is not set." }, 503);
+  }
+  const input = c.req.valid("json");
+  try {
+    const result = await predictorClient.predict({
+      platform: input.platform,
+      contentType: input.contentType,
+      caption: input.caption,
+      plannedPostedAt: input.plannedPostedAt,
+    });
+    return c.json(result, 200);
+  } catch (err) {
+    if (err instanceof PredictorServiceError) {
+      if (err.status === 422) {
+        return c.json({ error: "invalid_input", message: err.message }, 400);
+      }
+      Sentry.captureException(err);
+      return c.json({ error: "predictor_unavailable", message: err.message }, 502);
+    }
+    throw err;
+  }
 });
 
 // Staff order entry: a phone/WhatsApp customer may not have an email or

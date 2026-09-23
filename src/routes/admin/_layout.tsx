@@ -83,6 +83,12 @@ function AdminChrome() {
             >
               Cockpit
             </Link>
+            <Link
+              to="/admin/post-predict"
+              className="font-sans text-sm text-muted-foreground hover:text-foreground data-[status=active]:text-foreground data-[status=active]:font-medium"
+            >
+              Post predictor
+            </Link>
           </nav>
           <div className="flex items-center gap-3">
             <span className="font-sans text-sm text-muted-foreground">{adminUser.name}</span>

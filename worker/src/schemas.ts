@@ -597,3 +597,38 @@ export const AdminAlertResolveInputSchema = z
     }),
   })
   .openapi("AdminAlertResolveInput");
+
+// --- Post-engagement predictor (sibling dhaka_kacchi_ai_harness repo's
+// predictor/ service - ml/00-problem-framing through ml/05-production for
+// how the model was built, chosen, and evaluated. See
+// worker/src/lib/predictorClient.ts.) ---
+
+export const PredictPostInputSchema = z
+  .object({
+    platform: z.enum(["facebook", "instagram"]),
+    contentType: z.string().max(50).optional().openapi({
+      description: "e.g. 'video', 'reel', 'image', 'carousel'. Omit if undecided yet.",
+    }),
+    caption: z.string().max(5000).default(""),
+    plannedPostedAt: z.string().datetime({ offset: true }).openapi({
+      description: "ISO 8601 timestamp for when the post is planned to go live.",
+    }),
+  })
+  .openapi("PredictPostInput");
+
+export const PredictReasonSchema = z
+  .object({
+    feature: z.string(),
+    contribution: z.number(),
+  })
+  .openapi("PredictReason");
+
+export const PredictPostResultSchema = z
+  .object({
+    label: z.enum(["likely_below_typical", "likely_at_or_above_typical"]),
+    probability: z.number(),
+    threshold: z.number(),
+    modelVersion: z.string(),
+    topReasons: z.array(PredictReasonSchema),
+  })
+  .openapi("PredictPostResult");
