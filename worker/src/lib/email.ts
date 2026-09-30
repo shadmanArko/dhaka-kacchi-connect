@@ -112,6 +112,45 @@ export async function sendPasswordResetEmail(
 }
 
 /**
+ * Sends the registration OTP code by email - the fallback channel when
+ * BerlinSMS is down or a customer never received the text (see
+ * worker/src/lib/berlinSms.ts). Unlike sendOtpSms, this DOES catch and
+ * report its own failure rather than letting it throw: the register route
+ * needs a clean true/false to decide whether registration has genuinely
+ * failed (both channels down) or can tell the customer "check your email"
+ * instead of a 500. Matches sendOtpSms's local-dev fallback (log + return
+ * true) so registration is testable locally without real SMTP either.
+ */
+export async function sendOtpEmail(email: string, name: string, code: string): Promise<boolean> {
+  if (!config.hostingerSmtpHost || !config.hostingerSmtpUser || !config.hostingerSmtpPass) {
+    console.log(`[dev] HOSTINGER_SMTP_* not configured - OTP code for ${email}: ${code}`);
+    return true;
+  }
+
+  try {
+    await getTransporter().sendMail({
+      from: `"Dhaka Kacchi Berlin" <${config.orderFromEmail}>`,
+      to: `"${name}" <${email}>`,
+      subject: "Your verification code — Dhaka Kacchi Berlin",
+      text: [
+        `Hi ${name},`,
+        "",
+        `Your Dhaka Kacchi verification code is: ${code}`,
+        "",
+        "It expires in 10 minutes. If you didn't request this, you can ignore this email.",
+        "",
+        "Dhaka Kacchi Berlin",
+      ].join("\n"),
+    });
+    return true;
+  } catch (err) {
+    Sentry.captureException(err);
+    console.error("OTP email send failed:", err);
+    return false;
+  }
+}
+
+/**
  * Sent when staff apply a discount via the admin panel - sendConfirmationEmail
  * already went out once, synchronously, at order creation, with no re-notify
  * mechanism, so a discount applied afterwards (the whole point of that admin

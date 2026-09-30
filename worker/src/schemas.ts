@@ -156,6 +156,8 @@ export const PublicCustomerSchema = z
   })
   .openapi("PublicCustomer");
 
+export const OtpChannelSchema = z.enum(["sms", "email"]);
+
 export const RegisterInputSchema = z
   .object({
     phone: PhoneSchema,
@@ -164,6 +166,12 @@ export const RegisterInputSchema = z
     address: DeliveryAddressSchema,
     email: z.string().email(),
     password: PasswordSchema,
+    channel: OtpChannelSchema.optional().openapi({
+      description:
+        "How to send the verification code. Omit/'sms' tries SMS first and falls back to " +
+        "email automatically if SMS fails. Pass 'email' explicitly to skip SMS entirely - " +
+        "e.g. a 'send it by email instead' button when a customer didn't receive a text.",
+    }),
   })
   .openapi("RegisterInput");
 
@@ -172,6 +180,10 @@ export const RegisterResultSchema = z
     phone: PhoneSchema,
     expiresAt: z.string().openapi({ description: "ISO 8601 - when the OTP code expires" }),
     message: z.string(),
+    channel: OtpChannelSchema.openapi({
+      description:
+        "Which channel the code actually went out on - may differ from what was requested (e.g. SMS failed and it fell back to email).",
+    }),
   })
   .openapi("RegisterResult");
 

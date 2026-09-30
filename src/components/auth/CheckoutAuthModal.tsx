@@ -53,6 +53,10 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
 
   // OTP fields
   const [code, setCode] = useState("");
+  // Which channel the last register/resend call actually used - drives the
+  // "we sent a code to X" copy on the otp step. Undefined until the first
+  // register response comes back; defaults to reading as "sms" in the UI.
+  const [otpChannel, setOtpChannel] = useState<"sms" | "email" | undefined>(undefined);
 
   // Forgot-password field
   const [forgotEmail, setForgotEmail] = useState("");
@@ -81,6 +85,7 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
     setLoginPassword("");
     setPassword("");
     setCode("");
+    setOtpChannel(undefined);
     setForgotEmail("");
   }
 
@@ -135,7 +140,7 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
     setError("");
     setNotice("");
     try {
-      await api.register({
+      const result = await api.register({
         phone: phone.trim(),
         name: name.trim(),
         dateOfBirth,
@@ -148,6 +153,7 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
         email: email.trim(),
         password,
       });
+      setOtpChannel(result.channel);
       setStep("otp");
       trackEvent("auth_registration_started");
     } catch (err) {
@@ -189,12 +195,20 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
     }
   }
 
-  async function resendCode() {
+  /**
+   * Re-runs registration to get a fresh code. `channel` is left undefined
+   * for the plain "Resend code" button (server tries SMS, falls back to
+   * email on its own) and passed as "email" for the "send it by email
+   * instead" button - the customer has already told us the text isn't
+   * arriving, so there's no reason to make them wait on a second SMS
+   * attempt first.
+   */
+  async function resendCode(channel?: "email") {
     setBusy(true);
     setError("");
     setNotice("");
     try {
-      await api.register({
+      const result = await api.register({
         phone: phone.trim(),
         name: name.trim(),
         dateOfBirth,
@@ -206,8 +220,14 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
         },
         email: email.trim(),
         password,
+        channel,
       });
-      setNotice("A new code was sent.");
+      setOtpChannel(result.channel);
+      setNotice(
+        result.channel === "email"
+          ? `A new code was emailed to ${email.trim()}.`
+          : "A new code was sent.",
+      );
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't resend the code right now.");
     } finally {
@@ -452,7 +472,9 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
               Verify your phone
             </DialogTitle>
             <p className="font-sans text-[0.85rem] text-muted-warm">
-              We sent a 6-digit code to {phone}. Enter it below to finish creating your account.
+              {otpChannel === "email"
+                ? `We emailed a 6-digit code to ${email}. Enter it below to finish creating your account.`
+                : `We sent a 6-digit code to ${phone}. Enter it below to finish creating your account.`}
             </p>
             <input
               type="text"
@@ -479,9 +501,26 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
             <Button type="submit" variant="gold" className="w-full justify-center" disabled={busy}>
               {busy ? "Verifying…" : "Verify & create account"}
             </Button>
-            <button type="button" className={linkClass} onClick={resendCode} disabled={busy}>
-              Resend code
-            </button>
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                className={linkClass}
+                onClick={() => resendCode()}
+                disabled={busy}
+              >
+                Resend code
+              </button>
+              {otpChannel !== "email" && (
+                <button
+                  type="button"
+                  className={linkClass}
+                  onClick={() => resendCode("email")}
+                  disabled={busy}
+                >
+                  Didn't get it? Send by email
+                </button>
+              )}
+            </div>
           </form>
         )}
 

@@ -42,6 +42,7 @@ import {
   registerEmailNotifications,
   sendDiscountAppliedEmail,
   sendOrderUpdatedEmail,
+  sendOtpEmail,
   sendPasswordResetEmail,
 } from "./lib/email";
 import { emitOrderCreated } from "./lib/orderEvents";
@@ -62,6 +63,7 @@ import {
   registerTelegramNotifications,
   sendDiscountAppliedTelegramMessage,
   sendOrderUpdatedTelegramMessage,
+  sendTelegramMessage,
   secureCompare,
 } from "./lib/telegram";
 import {
@@ -464,10 +466,38 @@ v1.openapi(registerRoute, async (c) => {
     },
   });
 
-  const sent = await sendOtpSms(phone, code);
+  // Default (or explicit "sms"): try SMS first, fall back to email
+  // automatically on failure - BerlinSMS going down should degrade
+  // registration, not block it outright. An explicit "email" request (the
+  // frontend's "send it by email instead" button) skips SMS entirely,
+  // since the customer has already told us the text isn't arriving.
+  const requestedChannel = body.channel ?? "sms";
+  let channel: "sms" | "email" = requestedChannel;
+  let sent: boolean;
+
+  if (requestedChannel === "email") {
+    sent = await sendOtpEmail(email, body.name.trim(), code);
+  } else {
+    sent = await sendOtpSms(phone, code);
+    if (!sent) {
+      // Fire-and-forget: a Telegram alert is how the owner finds out
+      // BerlinSMS is down, instead of finding out from a customer
+      // complaint (see the incident this fallback was built for).
+      sendTelegramMessage(
+        `⚠️ OTP SMS failed for ${phone} - falling back to email. Check BerlinSMS.`,
+      ).catch(() => {});
+      channel = "email";
+      sent = await sendOtpEmail(email, body.name.trim(), code);
+    }
+  }
+
   if (!sent) {
     return c.json(
-      { error: "sms_failed", message: "Couldn't send the verification code. Please try again." },
+      {
+        error: "otp_send_failed",
+        message:
+          "Couldn't send the verification code by SMS or email right now. Please try again shortly.",
+      },
       400,
     );
   }
@@ -476,7 +506,11 @@ v1.openapi(registerRoute, async (c) => {
     {
       phone,
       expiresAt: expiresAt.toISOString(),
-      message: "A verification code was sent to your phone.",
+      message:
+        channel === "email"
+          ? `A verification code was emailed to ${email}.`
+          : "A verification code was sent to your phone.",
+      channel,
     },
     201,
   );
