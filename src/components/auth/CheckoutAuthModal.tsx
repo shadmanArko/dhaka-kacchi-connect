@@ -53,10 +53,11 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
 
   // OTP fields
   const [code, setCode] = useState("");
-  // Which channel the last register/resend call actually used - drives the
-  // "we sent a code to X" copy on the otp step. Undefined until the first
-  // register response comes back; defaults to reading as "sms" in the UI.
-  const [otpChannel, setOtpChannel] = useState<"sms" | "email" | undefined>(undefined);
+  // Which channel(s) the last register/resend call actually delivered to -
+  // normally both, but may be just one if the other failed. Drives the
+  // "we sent a code to X" copy on the otp step. Empty until the first
+  // register response comes back.
+  const [otpChannels, setOtpChannels] = useState<("sms" | "email")[]>([]);
 
   // Forgot-password field
   const [forgotEmail, setForgotEmail] = useState("");
@@ -85,7 +86,7 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
     setLoginPassword("");
     setPassword("");
     setCode("");
-    setOtpChannel(undefined);
+    setOtpChannels([]);
     setForgotEmail("");
   }
 
@@ -153,7 +154,7 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
         email: email.trim(),
         password,
       });
-      setOtpChannel(result.channel);
+      setOtpChannels(result.channels);
       setStep("otp");
       trackEvent("auth_registration_started");
     } catch (err) {
@@ -195,15 +196,10 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
     }
   }
 
-  /**
-   * Re-runs registration to get a fresh code. `channel` is left undefined
-   * for the plain "Resend code" button (server tries SMS, falls back to
-   * email on its own) and passed as "email" for the "send it by email
-   * instead" button - the customer has already told us the text isn't
-   * arriving, so there's no reason to make them wait on a second SMS
-   * attempt first.
-   */
-  async function resendCode(channel?: "email") {
+  /** Re-runs registration to get a fresh code, sent to both phone and email
+   * again (see worker/src/index.ts's registerRoute - every send goes to
+   * both channels, not one-then-fallback). */
+  async function resendCode() {
     setBusy(true);
     setError("");
     setNotice("");
@@ -220,14 +216,9 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
         },
         email: email.trim(),
         password,
-        channel,
       });
-      setOtpChannel(result.channel);
-      setNotice(
-        result.channel === "email"
-          ? `A new code was emailed to ${email.trim()}.`
-          : "A new code was sent.",
-      );
+      setOtpChannels(result.channels);
+      setNotice("A new code was sent.");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't resend the code right now.");
     } finally {
@@ -472,10 +463,17 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
               Verify your phone
             </DialogTitle>
             <p className="font-sans text-[0.85rem] text-muted-warm">
-              {otpChannel === "email"
-                ? `We emailed a 6-digit code to ${email}. Enter it below to finish creating your account.`
-                : `We sent a 6-digit code to ${phone}. Enter it below to finish creating your account.`}
+              {otpChannels.includes("sms") && otpChannels.includes("email")
+                ? `We sent a 6-digit code to ${phone} and to ${email}. Enter it below to finish creating your account.`
+                : otpChannels.includes("email")
+                  ? `We emailed a 6-digit code to ${email}. Enter it below to finish creating your account.`
+                  : `We sent a 6-digit code to ${phone}. Enter it below to finish creating your account.`}
             </p>
+            {otpChannels.includes("email") && (
+              <p className="font-sans text-[0.78rem] text-muted-warm/80">
+                Don't see the email? Please check your spam or junk folder too.
+              </p>
+            )}
             <input
               type="text"
               required
@@ -501,26 +499,14 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
             <Button type="submit" variant="gold" className="w-full justify-center" disabled={busy}>
               {busy ? "Verifying…" : "Verify & create account"}
             </Button>
-            <div className="flex items-center justify-between">
-              <button
-                type="button"
-                className={linkClass}
-                onClick={() => resendCode()}
-                disabled={busy}
-              >
-                Resend code
-              </button>
-              {otpChannel !== "email" && (
-                <button
-                  type="button"
-                  className={linkClass}
-                  onClick={() => resendCode("email")}
-                  disabled={busy}
-                >
-                  Didn't get it? Send by email
-                </button>
-              )}
-            </div>
+            <button
+              type="button"
+              className={linkClass}
+              onClick={() => resendCode()}
+              disabled={busy}
+            >
+              Resend code
+            </button>
           </form>
         )}
 

@@ -166,12 +166,6 @@ export const RegisterInputSchema = z
     address: DeliveryAddressSchema,
     email: z.string().email(),
     password: PasswordSchema,
-    channel: OtpChannelSchema.optional().openapi({
-      description:
-        "How to send the verification code. Omit/'sms' tries SMS first and falls back to " +
-        "email automatically if SMS fails. Pass 'email' explicitly to skip SMS entirely - " +
-        "e.g. a 'send it by email instead' button when a customer didn't receive a text.",
-    }),
   })
   .openapi("RegisterInput");
 
@@ -180,10 +174,14 @@ export const RegisterResultSchema = z
     phone: PhoneSchema,
     expiresAt: z.string().openapi({ description: "ISO 8601 - when the OTP code expires" }),
     message: z.string(),
-    channel: OtpChannelSchema.openapi({
-      description:
-        "Which channel the code actually went out on - may differ from what was requested (e.g. SMS failed and it fell back to email).",
-    }),
+    channels: z
+      .array(OtpChannelSchema)
+      .min(1)
+      .openapi({
+        description:
+          "Which channel(s) actually delivered the code - normally both, but may be just one " +
+          "if the other failed (e.g. BerlinSMS down, or an invalid email address).",
+      }),
   })
   .openapi("RegisterResult");
 

@@ -466,32 +466,31 @@ v1.openapi(registerRoute, async (c) => {
     },
   });
 
-  // Default (or explicit "sms"): try SMS first, fall back to email
-  // automatically on failure - BerlinSMS going down should degrade
-  // registration, not block it outright. An explicit "email" request (the
-  // frontend's "send it by email instead" button) skips SMS entirely,
-  // since the customer has already told us the text isn't arriving.
-  const requestedChannel = body.channel ?? "sms";
-  let channel: "sms" | "email" = requestedChannel;
-  let sent: boolean;
+  // Send the SAME code over both channels, every time - not one-then-
+  // fallback. Either can silently fail to actually reach the customer (a
+  // carrier drops an SMS, an inbox provider spam-filters the email) with no
+  // way for this server to detect that in advance, so the reliable fix is
+  // giving the customer two independent chances to find the code rather
+  // than guessing which channel to trust. Run concurrently so a slow/down
+  // provider on one side doesn't delay the other.
+  const [smsSent, emailSent] = await Promise.all([
+    sendOtpSms(phone, code),
+    sendOtpEmail(email, body.name.trim(), code),
+  ]);
 
-  if (requestedChannel === "email") {
-    sent = await sendOtpEmail(email, body.name.trim(), code);
-  } else {
-    sent = await sendOtpSms(phone, code);
-    if (!sent) {
-      // Fire-and-forget: a Telegram alert is how the owner finds out
-      // BerlinSMS is down, instead of finding out from a customer
-      // complaint (see the incident this fallback was built for).
-      sendTelegramMessage(
-        `⚠️ OTP SMS failed for ${phone} - falling back to email. Check BerlinSMS.`,
-      ).catch(() => {});
-      channel = "email";
-      sent = await sendOtpEmail(email, body.name.trim(), code);
-    }
+  if (!smsSent) {
+    // Fire-and-forget: a Telegram alert is how the owner finds out BerlinSMS
+    // is down, instead of finding out from a customer complaint (see the
+    // incident this was built for).
+    sendTelegramMessage(`⚠️ OTP SMS failed for ${phone}. Check BerlinSMS.`).catch(() => {});
   }
 
-  if (!sent) {
+  const channels: ("sms" | "email")[] = [
+    ...(smsSent ? (["sms"] as const) : []),
+    ...(emailSent ? (["email"] as const) : []),
+  ];
+
+  if (channels.length === 0) {
     return c.json(
       {
         error: "otp_send_failed",
@@ -502,15 +501,22 @@ v1.openapi(registerRoute, async (c) => {
     );
   }
 
+  const bothSent = smsSent && emailSent;
+  const message = bothSent
+    ? `We've sent a verification code to your phone and to ${email}. ` +
+      "If you don't see the email in a minute or two, please check your spam/junk folder."
+    : smsSent
+      ? `A verification code was texted to your phone. (We couldn't email it to ${email} - ` +
+        "double-check that address is correct.)"
+      : `We couldn't text your phone, so we've emailed the code to ${email} instead - ` +
+        "check your spam/junk folder if you don't see it.";
+
   return c.json(
     {
       phone,
       expiresAt: expiresAt.toISOString(),
-      message:
-        channel === "email"
-          ? `A verification code was emailed to ${email}.`
-          : "A verification code was sent to your phone.",
-      channel,
+      message,
+      channels,
     },
     201,
   );

@@ -216,10 +216,6 @@ export type RegisterInput = {
   address: DeliveryAddressInput;
   email: string;
   password: string;
-  /** Omit/"sms" tries SMS first and falls back to email automatically if it
-   * fails. Pass "email" explicitly for a "send it by email instead" resend -
-   * see worker/src/index.ts's registerRoute handler. */
-  channel?: OtpChannel;
 };
 
 export type AuthResult = { token: string; customer: PublicCustomer };
@@ -518,7 +514,7 @@ export const api = {
 
   // --- Customer accounts ---
   register: (input: RegisterInput) =>
-    apiFetch<{ phone: string; expiresAt: string; message: string; channel: OtpChannel }>(
+    apiFetch<{ phone: string; expiresAt: string; message: string; channels: OtpChannel[] }>(
       "/v1/auth/register",
       {
         method: "POST",
