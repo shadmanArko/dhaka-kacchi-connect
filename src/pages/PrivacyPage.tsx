@@ -34,6 +34,10 @@ export function PrivacyPage() {
             {t("privacy.intro", { siteName: site.name })}
           </p>
 
+          <Section title={t("privacy.controller.title")}>
+            <p>{t("privacy.controller.body", { siteName: site.name, email: site.email })}</p>
+          </Section>
+
           <Section title={t("privacy.section1.title")}>
             <p>{t("privacy.section1.body")}</p>
           </Section>
@@ -42,6 +46,12 @@ export function PrivacyPage() {
             <p>{t("privacy.section2.body1")}</p>
             <p>{t("privacy.section2.body2")}</p>
             <p>{t("privacy.section2.body3")}</p>
+          </Section>
+
+          <Section title={t("privacy.ads.title")}>
+            <p>{t("privacy.ads.body1", { siteName: site.name })}</p>
+            <p>{t("privacy.ads.body2")}</p>
+            <p>{t("privacy.ads.body3")}</p>
           </Section>
 
           <Section title={t("privacy.section3.title")}>
