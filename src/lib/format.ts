@@ -1,18 +1,27 @@
+import i18n from "@/lib/i18n";
+
 /**
  * Display formatting for money and delivery dates. These were copy-pasted
  * into five components, which is how the admin order table quietly ended up
  * with a different date format from everything else.
+ *
+ * Both follow the visitor's language: English keeps "€12.50" and
+ * "Saturday, 19 September", German gets "12,50 €" and "Samstag, 19. September".
+ * (Admin pages are English-only, so they always see the English form.)
  */
+
+const intlLocale = () => (i18n.language === "de" ? "de-DE" : "en-GB");
 
 /** Money is stored as integer cents everywhere (see worker/src/lib/money.ts);
  * this is the only place that turns it into something a customer reads.
- *
- * Deliberately NOT Intl.NumberFormat("de-DE"), which would render "12,50 €".
- * The whole UI is English, every date already uses en-GB, and the worker's
- * confirmation email and Telegram messages emit this same "€12.50" shape - a
- * frontend-only switch would make the site disagree with its own emails.
- * Revisit as part of a real German-localization decision, not before. */
+ * English keeps the "€12.50" shape the worker's confirmation emails and
+ * Telegram messages use; German uses the local "12,50 €". */
 export function formatEuro(cents: number): string {
+  if (i18n.language === "de") {
+    return new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(
+      cents / 100,
+    );
+  }
   return `€${(cents / 100).toFixed(2)}`;
 }
 
@@ -30,7 +39,7 @@ export function formatEuro(cents: number): string {
  */
 export function formatDate(iso: string, style: "long" | "short" = "long"): string {
   return new Date(`${iso}T12:00:00Z`).toLocaleDateString(
-    "en-GB",
+    intlLocale(),
     style === "short"
       ? { day: "numeric", month: "short", timeZone: "UTC" }
       : { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" },

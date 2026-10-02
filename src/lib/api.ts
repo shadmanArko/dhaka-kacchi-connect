@@ -34,6 +34,10 @@ export class ApiError extends Error {
      * render this, it's exactly the untrusted text `message` exists to keep
      * out of the UI. */
     public readonly detail?: string,
+    /** The worker's machine-readable error code (e.g. "invalid_delivery_date"),
+     * when the response carried one. Lets callers react to a specific failure
+     * without string-matching an English message. */
+    public readonly code?: string,
   ) {
     super(message);
     this.name = "ApiError";
@@ -120,14 +124,20 @@ export async function apiFetch<T>(
   if (!res.ok) {
     const raw = await res.text().catch(() => "");
     let friendly = statusMessage(res.status);
+    let code: string | undefined;
     try {
-      const body = JSON.parse(raw) as { message?: unknown };
+      const body = JSON.parse(raw) as { error?: unknown; message?: unknown };
+      if (typeof body.error === "string" && /^[a-z_]{2,40}$/.test(body.error)) code = body.error;
       if (isDisplayableMessage(body.message)) friendly = body.message.trim();
+      // A translated message for this exact code beats the worker's English
+      // text, so German visitors don't get English errors mid-checkout.
+      const key = code ? `api.code.${code}` : undefined;
+      if (key && i18n.exists(key)) friendly = i18n.t(key);
     } catch {
       // Not JSON at all (proxy HTML page, gateway text) - keep the generic
       // message rather than echoing the body.
     }
-    throw new ApiError(res.status, friendly, "http", raw.slice(0, DETAIL_MAX));
+    throw new ApiError(res.status, friendly, "http", raw.slice(0, DETAIL_MAX), code);
   }
 
   return (await res.json()) as T;
@@ -480,16 +490,22 @@ const SIDE_EFFECT_TIMEOUT_MS = 45_000;
 const ORDER_TIMEOUT_MS = 60_000;
 
 export const api = {
-  subscribe: (email: string) =>
-    apiFetch<{ ok: true }>("/subscribe", {
+  // Double opt-in: this only starts a sign-up (the server emails a link);
+  // confirmSubscription completes it from the link.
+  subscribe: (email: string, locale: string) =>
+    apiFetch<{ ok: true }>(
+      "/v1/subscribe",
+      { method: "POST", body: JSON.stringify({ email, locale }) },
+      { timeoutMs: SIDE_EFFECT_TIMEOUT_MS }, // awaits the confirmation email
+    ),
+  confirmSubscription: (token: string) =>
+    apiFetch<{ ok: true }>("/v1/subscribe/confirm", {
       method: "POST",
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ token }),
     }),
-  // Every ordering endpoint lives under /v1 on the backend (see
-  // worker/src/index.ts) - versioned from day one so a future breaking
-  // change never has to retrofit a prefix onto paths a real client (or
-  // this frontend) already depends on. /subscribe is unrelated - it isn't
-  // implemented in worker/ yet (see BACKEND.md), so it stays unprefixed.
+  // Every endpoint lives under /v1 on the backend (see worker/src/index.ts) -
+  // versioned from day one so a future breaking change never has to retrofit
+  // a prefix onto paths a real client (or this frontend) already depends on.
   getMenu: () => apiFetch<{ items: MenuItem[] }>("/v1/menu"),
   getAvailability: () => apiFetch<{ dates: string[] }>("/v1/availability"),
   quoteDelivery: (address: DeliveryAddressInput) =>

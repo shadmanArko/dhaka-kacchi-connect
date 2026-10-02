@@ -1,18 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { OrdersPage } from "@/pages/OrdersPage";
-import { DEFAULT_LOCALE } from "@/lib/i18n";
+import type { Locale } from "@/lib/i18n";
 import { pageHead } from "@/lib/seo";
 
-export const Route = createFileRoute("/orders")({
-  // `?order=<id>` rather than a /orders/$id path segment: this app ships as a
-  // static export with no SPA fallback, so a dynamic path segment can't be
-  // deep-linked or hard-refreshed. Same reasoning as the admin dashboard.
+export const Route = createFileRoute("/$locale/_layout/orders")({
   validateSearch: (search: Record<string, unknown>) => ({
     order: typeof search.order === "string" ? search.order : undefined,
   }),
-  head: () => {
-    const head = pageHead("/orders", DEFAULT_LOCALE, "seo.orders");
-    // Signed-in-only, and thin content for a crawler either way.
+  head: ({ params }) => {
+    const head = pageHead("/orders", params.locale as Locale, "seo.orders");
     return { ...head, meta: [...head.meta, { name: "robots", content: "noindex, nofollow" }] };
   },
   component: OrdersRoute,

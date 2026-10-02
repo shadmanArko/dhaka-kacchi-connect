@@ -19,7 +19,7 @@ const STORAGE_KEY = "dhaka-kacchi-cart";
 /** Bump when the shape changes; an unrecognised version is treated as absent
  * rather than migrated, because a dropped cart is a far cheaper failure than a
  * half-understood one. */
-const CART_VERSION = 1;
+const CART_VERSION = 2;
 
 /** A cart is pinned to a Saturday that has usually passed by now. Two weeks is
  * long enough to survive "I'll finish this tomorrow" and short enough that a
@@ -31,7 +31,10 @@ export type StoredCart = {
   savedAt: number;
   quantities: Record<string, number>;
   deliveryDate: string;
-  fulfillmentType: "pickup" | "delivery";
+  /** null until the customer has actually chosen. Version 1 carts defaulted to
+   * "pickup", so a restored v1 cart could not tell "chose pickup" from "never
+   * chose" - hence the version bump. */
+  fulfillmentType: "pickup" | "delivery" | null;
   street: string;
   houseNumber: string;
   postalCode: string;

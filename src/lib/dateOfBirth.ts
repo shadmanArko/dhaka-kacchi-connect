@@ -5,11 +5,15 @@
  * the two in step.
  *
  * Rules: a real calendar date, not in the future, not more than 120 years ago.
+ *
+ * Errors are translation keys (+ values), not English text, so the German
+ * form shows German messages.
  */
 
 export const MAX_AGE_YEARS = 120;
 
-export type DobErrors = { day?: string; month?: string; year?: string; date?: string };
+export type DobError = { key: string; values?: Record<string, unknown> };
+export type DobErrors = { day?: DobError; month?: DobError; year?: DobError; date?: DobError };
 
 export function validateDateOfBirth(
   day: string,
@@ -25,17 +29,17 @@ export function validateDateOfBirth(
   const m = Number(month);
   const y = Number(year);
 
-  if (!day) errors.day = "Enter the day.";
-  else if (!Number.isInteger(d) || d < 1 || d > 31) errors.day = "Day must be between 1 and 31.";
+  if (!day) errors.day = { key: "auth.dob.dayRequired" };
+  else if (!Number.isInteger(d) || d < 1 || d > 31) errors.day = { key: "auth.dob.dayRange" };
 
-  if (!month) errors.month = "Enter the month.";
-  else if (!Number.isInteger(m) || m < 1 || m > 12)
-    errors.month = "Month must be between 1 and 12.";
+  if (!month) errors.month = { key: "auth.dob.monthRequired" };
+  else if (!Number.isInteger(m) || m < 1 || m > 12) errors.month = { key: "auth.dob.monthRange" };
 
-  if (!year) errors.year = "Enter the year.";
-  else if (year.length !== 4) errors.year = "Enter a 4-digit year, e.g. 1990.";
-  else if (y > thisYear) errors.year = "Date of birth can't be in the future.";
-  else if (y < earliestYear) errors.year = `Year must be ${earliestYear} or later.`;
+  if (!year) errors.year = { key: "auth.dob.yearRequired" };
+  else if (year.length !== 4) errors.year = { key: "auth.dob.yearFormat" };
+  else if (y > thisYear) errors.year = { key: "auth.dob.future" };
+  else if (y < earliestYear)
+    errors.year = { key: "auth.dob.tooOld", values: { year: earliestYear } };
 
   if (errors.day || errors.month || errors.year) return { iso: "", errors };
 
@@ -43,13 +47,13 @@ export function validateDateOfBirth(
   const isRealDate =
     date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
   if (!isRealDate) {
-    errors.date = "That date doesn't exist. Please check the day and month.";
+    errors.date = { key: "auth.dob.notReal" };
     return { iso: "", errors };
   }
 
   const todayUtc = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
   if (date.getTime() > todayUtc) {
-    errors.date = "Date of birth can't be in the future.";
+    errors.date = { key: "auth.dob.future" };
     return { iso: "", errors };
   }
 

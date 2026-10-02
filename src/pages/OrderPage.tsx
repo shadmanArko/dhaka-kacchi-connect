@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatEuro, formatDate } from "@/lib/format";
 import { useTranslation } from "react-i18next";
 import { MessageCircle, RefreshCw } from "lucide-react";
@@ -6,6 +6,7 @@ import * as Sentry from "@sentry/react";
 import { PageHero } from "@/components/sections/PageHero";
 import { Reveal } from "@/components/ui/Reveal";
 import { CheckoutAuthModal } from "@/components/auth/CheckoutAuthModal";
+import { TextField } from "@/components/ui/TextField";
 import { LocaleLink } from "@/components/layout/LocaleLink";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useSession } from "@/hooks/useSession";
@@ -54,7 +55,9 @@ export function OrderPage() {
 
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [deliveryDate, setDeliveryDate] = useState("");
-  const [fulfillmentType, setFulfillmentType] = useState<FulfillmentType>("pickup");
+  // No default: silently pre-selecting pickup meant a customer who wanted
+  // delivery could press "Place order" and get a pickup order they never chose.
+  const [fulfillmentType, setFulfillmentType] = useState<FulfillmentType | null>(null);
   const [street, setStreet] = useState("");
   const [houseNumber, setHouseNumber] = useState("");
   const [postalCode, setPostalCode] = useState("");
@@ -65,9 +68,21 @@ export function OrderPage() {
   const [quoteState, setQuoteState] = useState<QuoteState>("idle");
   const [quote, setQuote] = useState<PostalCodeCheckResult | null>(null);
   const [quoteError, setQuoteError] = useState("");
+  // The postal code the current `quote` was fetched for. A quote only counts
+  // while it matches what is in the box right now - derived, not reset by
+  // hand on every edit, so editing street/house number (which don't affect the
+  // fee) can never throw a valid quote away.
+  const [quotedFor, setQuotedFor] = useState<string | null>(null);
 
   const [submitState, setSubmitState] = useState<SubmitState>("idle");
   const [submitError, setSubmitError] = useState("");
+  // Flipped by the first press of "Place order" / "Checkout": from then on
+  // every missing or invalid field explains itself instead of the button
+  // silently doing nothing.
+  const [attempted, setAttempted] = useState(false);
+  const fulfillmentRef = useRef<HTMLFieldSetElement>(null);
+  const lastAvailabilityFetch = useRef(Date.now());
+  const deliveryDateRef = useRef("");
   // A timeout is the one failure where re-submitting is actively dangerous:
   // the backend commits the order BEFORE it awaits the confirmation email and
   // Telegram fan-out, so a slow notification can time us out after the order
@@ -98,6 +113,7 @@ export function OrderPage() {
   // correct here precisely because the restore never ran on a failed attempt,
   // so there is no restored state to clobber.
   const [loadAttempt, setLoadAttempt] = useState(0);
+  deliveryDateRef.current = deliveryDate;
 
   useEffect(() => {
     setLoadState("loading");
@@ -128,7 +144,11 @@ export function OrderPage() {
 
         if (saved && hasRestoredItems) {
           setQuantities(restoredQuantities);
-          setFulfillmentType(saved.fulfillmentType === "delivery" ? "delivery" : "pickup");
+          setFulfillmentType(
+            saved.fulfillmentType === "delivery" || saved.fulfillmentType === "pickup"
+              ? saved.fulfillmentType
+              : null,
+          );
           setStreet(saved.street);
           setHouseNumber(saved.houseNumber);
           setPostalCode(saved.postalCode);
@@ -155,6 +175,7 @@ export function OrderPage() {
           setCartNotice(t("order.cartDateChanged"));
         }
 
+        lastAvailabilityFetch.current = Date.now();
         setLoadState("ready");
       })
       // This catch sits downstream of the whole `.then()` body, not just the
@@ -215,10 +236,58 @@ export function OrderPage() {
       setHouseNumber(session.customer.address.houseNumber);
       setPostalCode(session.customer.address.postalCode);
       setCity(session.customer.address.city);
-      resetQuote();
       setPrefilledForCustomerId(session.customer.id);
     }
   }, [session.customer, prefilledForCustomerId]);
+
+  // The moment a customer logs in, the pickup/delivery block appears. They
+  // came here to press the button, not to read the page, so bring the choice
+  // into view instead of letting them miss it.
+  useEffect(() => {
+    // A fresh login starts with a clean slate: don't greet them with red errors
+    // left over from the "Checkout" press that opened the login pop-up.
+    setAttempted(false);
+    if (!session.customer || fulfillmentType !== null) return;
+    requestAnimationFrame(() =>
+      fulfillmentRef.current?.scrollIntoView({ block: "center", behavior: "smooth" }),
+    );
+    // Only on login, not on every later render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.customer?.id]);
+
+  const refreshAvailability = useCallback(async () => {
+    try {
+      const res = await api.getAvailability();
+      lastAvailabilityFetch.current = Date.now();
+      setDates(res.dates);
+      const current = deliveryDateRef.current;
+      if (current && !res.dates.includes(current)) {
+        setDeliveryDate(res.dates[0] ?? "");
+        setCartNotice(t("order.cartDateChanged"));
+      } else if (!current && res.dates[0]) {
+        setDeliveryDate(res.dates[0]);
+      }
+    } catch {
+      // Keep what is on screen; the server re-checks the date on submit anyway.
+    }
+  }, [t]);
+
+  // A customer can leave this tab for minutes (reading the SMS code, checking
+  // with family) and come back after the Friday cutoff. Re-check the offered
+  // Saturdays whenever the page becomes visible again, so a dead date is
+  // swapped out before they hit "Place order", not after.
+  useEffect(() => {
+    function onVisible() {
+      if (
+        document.visibilityState === "visible" &&
+        Date.now() - lastAvailabilityFetch.current > 60_000
+      ) {
+        void refreshAvailability();
+      }
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [refreshAvailability]);
 
   const subtotalCents = useMemo(
     () => menu.reduce((sum, item) => sum + (quantities[item.sku] ?? 0) * item.priceCents, 0),
@@ -228,7 +297,19 @@ export function OrderPage() {
     () => Object.values(quantities).reduce((sum, q) => sum + q, 0),
     [quantities],
   );
-  const deliveryFeeCents = quote?.deliverable ? quote.feeCents : 0;
+  const trimmedPostal = postalCode.trim();
+  const postalComplete = /^\d{5}$/.test(trimmedPostal);
+  // A quote only counts while it was fetched for the postal code that is in
+  // the box right now. Anything else is "still checking" (5 digits typed, the
+  // debounced lookup hasn't landed) or "nothing to check yet".
+  const quoteStatus: QuoteState = !postalComplete
+    ? "idle"
+    : quotedFor === trimmedPostal
+      ? quoteState
+      : "checking";
+  const currentQuote = quotedFor === trimmedPostal ? quote : null;
+  const deliveryFeeCents =
+    fulfillmentType === "delivery" && currentQuote?.deliverable ? currentQuote.feeCents : 0;
   const totalCents = subtotalCents + deliveryFeeCents;
 
   useEffect(() => {
@@ -242,17 +323,8 @@ export function OrderPage() {
     setQuantities((prev) => ({ ...prev, [sku]: Math.max(0, qty) }));
   }
 
-  // Any address edit after a quote was fetched invalidates it — never let a
-  // stale quote for a different address silently carry over to submission.
-  function resetQuote() {
-    setQuoteState("idle");
-    setQuote(null);
-    setQuoteError("");
-  }
-
   function selectFulfillment(type: FulfillmentType) {
     setFulfillmentType(type);
-    resetQuote();
     trackEvent("order_fulfillment_selected", { fulfillmentType: type });
   }
 
@@ -268,7 +340,10 @@ export function OrderPage() {
   useEffect(() => {
     if (fulfillmentType !== "delivery") return;
     if (!/^\d{5}$/.test(debouncedPostalCode)) {
-      resetQuote();
+      setQuoteState("idle");
+      setQuote(null);
+      setQuotedFor(null);
+      setQuoteError("");
       return;
     }
 
@@ -280,6 +355,7 @@ export function OrderPage() {
       .then((q) => {
         if (cancelled) return;
         setQuote(q);
+        setQuotedFor(debouncedPostalCode);
         if (q.deliverable) {
           setQuoteState("ready");
           trackEvent("order_delivery_fee_quoted", {
@@ -294,6 +370,8 @@ export function OrderPage() {
       })
       .catch((err) => {
         if (cancelled) return;
+        setQuote(null);
+        setQuotedFor(debouncedPostalCode);
         setQuoteState("error");
         setQuoteError(err instanceof ApiError ? err.message : t("order.postalCheckError"));
       });
@@ -302,31 +380,74 @@ export function OrderPage() {
     };
   }, [debouncedPostalCode, fulfillmentType]);
 
-  // Everything needed before an account is involved - just items and a
-  // date. Fulfillment/address only exist once logged in (see the JSX
-  // below), so they can't gate opening the login/register pop-up.
-  const canCheckout = itemCount > 0 && !!deliveryDate;
-  const fulfillmentReady =
-    fulfillmentType === "pickup" || (quoteState === "ready" && quote?.deliverable === true);
-  const canSubmit =
-    canCheckout &&
-    fulfillmentReady &&
-    !!session.customer &&
-    customerName.trim().length > 0 &&
-    !session.isLoading;
+  // What is still missing, in page order. The button is never disabled for
+  // these: a greyed-out button that does nothing is the single most confusing
+  // thing a checkout can do. Instead, pressing it explains the first problem
+  // and moves the customer to it.
+  const problems = useMemo(() => {
+    const list: { id: string; message: string }[] = [];
+    if (itemCount === 0) list.push({ id: "order-items", message: t("order.err.noItems") });
+    if (!deliveryDate) list.push({ id: "order-date", message: t("order.err.noDate") });
+    if (session.customer) {
+      if (fulfillmentType === null) {
+        list.push({ id: "order-fulfillment", message: t("order.err.chooseFulfillment") });
+      }
+      if (fulfillmentType === "delivery") {
+        if (!street.trim()) list.push({ id: "order-street", message: t("order.err.street") });
+        if (!houseNumber.trim()) list.push({ id: "order-house", message: t("order.err.house") });
+        if (!postalComplete) {
+          list.push({ id: "order-postal", message: t("order.err.postal") });
+        } else if (quoteStatus === "error") {
+          list.push({ id: "order-postal", message: quoteError || t("order.postalCheckError") });
+        } else if (quoteStatus !== "ready") {
+          list.push({ id: "order-postal", message: t("order.err.quoteChecking") });
+        }
+        if (!city.trim()) list.push({ id: "order-city", message: t("order.err.city") });
+      }
+      if (customerName.trim().length < 2) {
+        list.push({ id: "order-name", message: t("order.err.name") });
+      }
+    }
+    return list;
+  }, [
+    t,
+    itemCount,
+    deliveryDate,
+    session.customer,
+    fulfillmentType,
+    street,
+    houseNumber,
+    postalComplete,
+    quoteStatus,
+    quoteError,
+    city,
+    customerName,
+  ]);
+  const problemFor = (id: string) =>
+    attempted ? problems.find((p) => p.id === id)?.message : undefined;
+
+  function focusProblem(id: string) {
+    const el = document.getElementById(id);
+    el?.focus({ preventScroll: true });
+    el?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (session.isLoading) return;
 
+    setAttempted(true);
+    if (problems.length > 0) {
+      focusProblem(problems[0].id);
+      return;
+    }
     if (!session.token || !session.customer) {
-      if (!canCheckout) return;
       trackEvent("order_checkout_clicked");
       trackWarehouseEvent("begin_checkout", { itemCount, totalCents });
       setAuthModalOpen(true);
       return;
     }
-    if (!canSubmit) return;
+    if (fulfillmentType === null) return;
 
     setSubmitState("submitting");
     setSubmitError("");
@@ -389,6 +510,18 @@ export function OrderPage() {
           : t("order.genericSubmitError");
       setSubmitError(message);
       setSubmitTimedOut(timedOut);
+      if (err instanceof ApiError) {
+        // The Saturday went stale while the customer was signing up: swap in
+        // a valid one now so they can simply press the button again.
+        if (err.code === "invalid_delivery_date") void refreshAvailability();
+        // The login expired mid-order: the page still looked signed in and a
+        // retry could never work. Sign out and ask them to log in again.
+        if (err.status === 401) {
+          session.logout();
+          setSubmitError(t("order.sessionExpired"));
+          setAuthModalOpen(true);
+        }
+      }
       // Deliberately no free-text `error` property: it could echo the
       // customer's own input back into PostHog. Status + kind aggregate
       // better in a funnel anyway.
@@ -576,14 +709,14 @@ export function OrderPage() {
                   <button
                     type="button"
                     onClick={session.logout}
-                    className="text-gold hover:text-gold-2 underline underline-offset-4"
+                    className="inline-flex min-h-11 items-center text-gold hover:text-gold-2 underline underline-offset-4"
                   >
                     {t("order.logout")}
                   </button>
                 </div>
               )}
 
-              <fieldset className="space-y-4">
+              <fieldset id="order-items" tabIndex={-1} className="space-y-4 outline-none">
                 <legend className="font-sans text-[0.68rem] uppercase tracking-[0.3em] text-gold-3 mb-2">
                   {t("order.yourItems")}
                 </legend>
@@ -632,6 +765,11 @@ export function OrderPage() {
                     </div>
                   </div>
                 ))}
+                {problemFor("order-items") && (
+                  <p role="alert" className="font-sans text-sm text-red-400">
+                    {problemFor("order-items")}
+                  </p>
+                )}
               </fieldset>
 
               <fieldset className="space-y-4">
@@ -639,7 +777,7 @@ export function OrderPage() {
                   {t("order.deliverySaturday")}
                 </legend>
                 <select
-                  id="deliveryDate"
+                  id="order-date"
                   aria-label={t("order.deliverySaturday")}
                   value={deliveryDate}
                   onChange={(e) => {
@@ -654,11 +792,29 @@ export function OrderPage() {
                     </option>
                   ))}
                 </select>
+                {dates.length === 0 && (
+                  <p className="font-sans text-sm text-muted-warm">
+                    {t("order.noDates")}{" "}
+                    <a
+                      href={buildWaLink("Hi Dhaka Kacchi — I'd like to order.")}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-gold underline underline-offset-4"
+                    >
+                      {t("order.orderOnWhatsapp")}
+                    </a>
+                  </p>
+                )}
               </fieldset>
 
               {session.customer ? (
                 <>
-                  <fieldset className="space-y-4">
+                  <fieldset
+                    id="order-fulfillment"
+                    ref={fulfillmentRef}
+                    tabIndex={-1}
+                    className="space-y-4 outline-none"
+                  >
                     <legend className="font-sans text-[0.68rem] uppercase tracking-[0.3em] text-gold-3 mb-2">
                       {t("order.pickupOrDelivery")}
                     </legend>
@@ -699,79 +855,76 @@ export function OrderPage() {
                       </button>
                     </div>
 
+                    {problemFor("order-fulfillment") && (
+                      <p role="alert" className="font-sans text-sm text-red-400">
+                        {problemFor("order-fulfillment")}
+                      </p>
+                    )}
+
                     {fulfillmentType === "delivery" && (
                       <div className="space-y-4 pt-2">
-                        <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-4">
-                          <input
+                        <div className="grid grid-cols-[1fr_6.5rem] gap-4">
+                          <TextField
+                            id="order-street"
+                            label={t("order.streetPlaceholder")}
                             type="text"
-                            placeholder={t("order.streetPlaceholder")}
-                            aria-label={t("order.streetPlaceholder")}
                             autoComplete="address-line1"
+                            enterKeyHint="next"
                             value={street}
-                            onChange={(e) => {
-                              setStreet(e.target.value);
-                              resetQuote();
-                            }}
-                            className={`ph-no-capture ${inputClass}`}
+                            onValueChange={setStreet}
+                            error={problemFor("order-street")}
                           />
-                          <input
+                          <TextField
+                            id="order-house"
+                            label={t("order.houseNumberPlaceholder")}
                             type="text"
-                            placeholder={t("order.houseNumberPlaceholder")}
-                            aria-label="House number"
                             autoComplete="address-line2"
+                            enterKeyHint="next"
+                            maxLength={20}
                             value={houseNumber}
-                            onChange={(e) => {
-                              setHouseNumber(e.target.value);
-                              resetQuote();
-                            }}
-                            className={`ph-no-capture sm:w-24 ${inputClass}`}
+                            onValueChange={setHouseNumber}
+                            error={problemFor("order-house")}
                           />
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <input
+                        <div className="grid grid-cols-[1fr_1.4fr] gap-4">
+                          <TextField
+                            id="order-postal"
+                            label={t("order.postalCodePlaceholder")}
                             type="text"
                             inputMode="numeric"
                             maxLength={5}
-                            placeholder={t("order.postalCodePlaceholder")}
-                            aria-label={t("order.postalCodePlaceholder")}
                             autoComplete="postal-code"
+                            enterKeyHint="next"
                             value={postalCode}
-                            onChange={(e) => {
-                              // Invalidate any stale quote immediately, not
-                              // just once the debounced re-check fires below
-                              // - otherwise a "ready" quote for the OLD
-                              // postal code could still gate the submit
-                              // button for the ~400ms before it settles.
-                              setPostalCode(e.target.value);
-                              resetQuote();
-                            }}
-                            className={`ph-no-capture ${inputClass}`}
+                            onValueChange={(v) => setPostalCode(v.replace(/\D/g, ""))}
+                            error={problemFor("order-postal")}
                           />
-                          <input
+                          <TextField
+                            id="order-city"
+                            label={t("order.cityPlaceholder")}
                             type="text"
-                            placeholder={t("order.cityPlaceholder")}
-                            aria-label={t("order.cityPlaceholder")}
                             autoComplete="address-level2"
+                            enterKeyHint="next"
                             value={city}
-                            onChange={(e) => setCity(e.target.value)}
-                            className={`ph-no-capture ${inputClass}`}
+                            onValueChange={setCity}
+                            error={problemFor("order-city")}
                           />
                         </div>
 
-                        {quoteState === "checking" && (
-                          <p className="font-sans text-[0.85rem] text-muted-warm">
+                        {quoteStatus === "checking" && (
+                          <p role="status" className="font-sans text-[0.85rem] text-muted-warm">
                             {t("order.checkingPostalCode")}
                           </p>
                         )}
-                        {quoteState === "ready" && quote?.deliverable && (
-                          <p className="font-sans text-[0.85rem] text-gold">
+                        {quoteStatus === "ready" && currentQuote?.deliverable && (
+                          <p role="status" className="font-sans text-[0.85rem] text-gold">
                             {t("order.distanceAway", {
-                              km: quote.distanceKm.toFixed(1),
-                              fee: formatEuro(quote.feeCents),
+                              km: currentQuote.distanceKm.toFixed(1),
+                              fee: formatEuro(currentQuote.feeCents),
                             })}
                           </p>
                         )}
-                        {quoteState === "error" && (
+                        {quoteStatus === "error" && !attempted && (
                           <p role="alert" className="font-sans text-[0.85rem] text-red-400">
                             {quoteError}
                           </p>
@@ -781,15 +934,15 @@ export function OrderPage() {
                   </fieldset>
 
                   <fieldset className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <input
+                    <TextField
+                      id="order-name"
+                      label={t("order.fullNamePlaceholder")}
                       type="text"
-                      required
-                      placeholder={t("order.fullNamePlaceholder")}
-                      aria-label={t("order.fullNamePlaceholder")}
                       autoComplete="name"
+                      enterKeyHint="next"
                       value={customerName}
-                      onChange={(e) => setCustomerName(e.target.value)}
-                      className={`ph-no-capture ${inputClass}`}
+                      onValueChange={setCustomerName}
+                      error={problemFor("order-name")}
                     />
                     <input
                       type="tel"
@@ -815,6 +968,7 @@ export function OrderPage() {
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
                       rows={3}
+                      maxLength={1000}
                       className={`ph-no-capture sm:col-span-2 resize-none ${inputClass}`}
                     />
                   </fieldset>
@@ -880,13 +1034,13 @@ export function OrderPage() {
                 </div>
               )}
 
+              {attempted && problems.length > 0 && (
+                <p className="font-sans text-sm text-red-400">{problems[0].message}</p>
+              )}
+
               <button
                 type="submit"
-                disabled={
-                  session.customer
-                    ? !canSubmit || submitState === "submitting" || submitTimedOut
-                    : !canCheckout
-                }
+                disabled={session.isLoading || submitState === "submitting" || submitTimedOut}
                 className="w-full bg-gold text-black-ink px-9 py-5 font-sans text-[0.8rem] uppercase tracking-[0.25em] hover:bg-gold-2 active:bg-gold-3 active:text-cream transition-colors disabled:opacity-50"
               >
                 {session.customer

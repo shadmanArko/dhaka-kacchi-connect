@@ -32,9 +32,8 @@ const ROUTES = [
   "/privacy",
   // Signed-in-only, but still a real static path that must exist on the host -
   // the gate is client-side (see the route's own comment), so the HTML has to
-  // be there for the redirect to be able to run at all. Not localized - a
-  // customer's own order history isn't marketing copy, and translating it
-  // would need its own scoping pass.
+  // be there for the redirect to be able to run at all. Translated too (see the
+  // /de list below) so German customers see their own order history in German.
   "/orders",
   // Admin panel - all three are static/enumerable paths (no dynamic
   // segment). Order detail/discount/status editing is deliberately a
@@ -56,9 +55,16 @@ const ROUTES = [
   // Adding a language later is: add it to SUPPORTED_LOCALES, add its column
   // to src/locales/translations.csv, and this array grows on its own.
   ...["de"].flatMap((locale) =>
-    ["/", "/about", "/history", "/order", "/subscribe", "/privacy"].map((route) =>
-      route === "/" ? `/${locale}` : `/${locale}${route}`,
-    ),
+    [
+      "/",
+      "/about",
+      "/history",
+      "/order",
+      "/subscribe",
+      "/privacy",
+      "/orders",
+      "/reset-password",
+    ].map((route) => (route === "/" ? `/${locale}` : `/${locale}${route}`)),
   ),
 ];
 
@@ -74,7 +80,7 @@ const SITE_URL = "https://dhakakacchi.com";
 //   /reset-password - reachable only from an emailed token link, also noindexed
 //   /orders         - a signed-in customer's own history, also noindexed
 const isExcludedFromSitemap = (route) =>
-  route.startsWith("/admin") || route === "/reset-password" || route === "/orders";
+  route.startsWith("/admin") || route.endsWith("/reset-password") || route.endsWith("/orders");
 
 // Slash-terminated, because LiteSpeed's DirectorySlash 301s /about -> /about/
 // and that redirect target is the URL Google actually lands on. Must stay

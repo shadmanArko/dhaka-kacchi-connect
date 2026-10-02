@@ -26,7 +26,9 @@ import { Route as AdminLayoutPostPredictRouteImport } from './routes/admin/_layo
 import { Route as AdminLayoutLoginRouteImport } from './routes/admin/_layout.login'
 import { Route as AdminLayoutCockpitRouteImport } from './routes/admin/_layout.cockpit'
 import { Route as LocaleLayoutSubscribeRouteImport } from './routes/$locale/_layout.subscribe'
+import { Route as LocaleLayoutResetPasswordRouteImport } from './routes/$locale/_layout.reset-password'
 import { Route as LocaleLayoutPrivacyRouteImport } from './routes/$locale/_layout.privacy'
+import { Route as LocaleLayoutOrdersRouteImport } from './routes/$locale/_layout.orders'
 import { Route as LocaleLayoutOrderRouteImport } from './routes/$locale/_layout.order'
 import { Route as LocaleLayoutHistoryRouteImport } from './routes/$locale/_layout.history'
 import { Route as LocaleLayoutAboutRouteImport } from './routes/$locale/_layout.about'
@@ -117,9 +119,20 @@ const LocaleLayoutSubscribeRoute = LocaleLayoutSubscribeRouteImport.update({
   path: '/subscribe',
   getParentRoute: () => LocaleLayoutRoute,
 } as any)
+const LocaleLayoutResetPasswordRoute =
+  LocaleLayoutResetPasswordRouteImport.update({
+    id: '/reset-password',
+    path: '/reset-password',
+    getParentRoute: () => LocaleLayoutRoute,
+  } as any)
 const LocaleLayoutPrivacyRoute = LocaleLayoutPrivacyRouteImport.update({
   id: '/privacy',
   path: '/privacy',
+  getParentRoute: () => LocaleLayoutRoute,
+} as any)
+const LocaleLayoutOrdersRoute = LocaleLayoutOrdersRouteImport.update({
+  id: '/orders',
+  path: '/orders',
   getParentRoute: () => LocaleLayoutRoute,
 } as any)
 const LocaleLayoutOrderRoute = LocaleLayoutOrderRouteImport.update({
@@ -157,7 +170,9 @@ export interface FileRoutesByFullPath {
   '/$locale/about': typeof LocaleLayoutAboutRoute
   '/$locale/history': typeof LocaleLayoutHistoryRoute
   '/$locale/order': typeof LocaleLayoutOrderRoute
+  '/$locale/orders': typeof LocaleLayoutOrdersRoute
   '/$locale/privacy': typeof LocaleLayoutPrivacyRoute
+  '/$locale/reset-password': typeof LocaleLayoutResetPasswordRoute
   '/$locale/subscribe': typeof LocaleLayoutSubscribeRoute
   '/admin/cockpit': typeof AdminLayoutCockpitRoute
   '/admin/login': typeof AdminLayoutLoginRoute
@@ -179,7 +194,9 @@ export interface FileRoutesByTo {
   '/$locale/about': typeof LocaleLayoutAboutRoute
   '/$locale/history': typeof LocaleLayoutHistoryRoute
   '/$locale/order': typeof LocaleLayoutOrderRoute
+  '/$locale/orders': typeof LocaleLayoutOrdersRoute
   '/$locale/privacy': typeof LocaleLayoutPrivacyRoute
+  '/$locale/reset-password': typeof LocaleLayoutResetPasswordRoute
   '/$locale/subscribe': typeof LocaleLayoutSubscribeRoute
   '/admin/cockpit': typeof AdminLayoutCockpitRoute
   '/admin/login': typeof AdminLayoutLoginRoute
@@ -204,7 +221,9 @@ export interface FileRoutesById {
   '/$locale/_layout/about': typeof LocaleLayoutAboutRoute
   '/$locale/_layout/history': typeof LocaleLayoutHistoryRoute
   '/$locale/_layout/order': typeof LocaleLayoutOrderRoute
+  '/$locale/_layout/orders': typeof LocaleLayoutOrdersRoute
   '/$locale/_layout/privacy': typeof LocaleLayoutPrivacyRoute
+  '/$locale/_layout/reset-password': typeof LocaleLayoutResetPasswordRoute
   '/$locale/_layout/subscribe': typeof LocaleLayoutSubscribeRoute
   '/admin/_layout/cockpit': typeof AdminLayoutCockpitRoute
   '/admin/_layout/login': typeof AdminLayoutLoginRoute
@@ -230,7 +249,9 @@ export interface FileRouteTypes {
     | '/$locale/about'
     | '/$locale/history'
     | '/$locale/order'
+    | '/$locale/orders'
     | '/$locale/privacy'
+    | '/$locale/reset-password'
     | '/$locale/subscribe'
     | '/admin/cockpit'
     | '/admin/login'
@@ -252,7 +273,9 @@ export interface FileRouteTypes {
     | '/$locale/about'
     | '/$locale/history'
     | '/$locale/order'
+    | '/$locale/orders'
     | '/$locale/privacy'
+    | '/$locale/reset-password'
     | '/$locale/subscribe'
     | '/admin/cockpit'
     | '/admin/login'
@@ -276,7 +299,9 @@ export interface FileRouteTypes {
     | '/$locale/_layout/about'
     | '/$locale/_layout/history'
     | '/$locale/_layout/order'
+    | '/$locale/_layout/orders'
     | '/$locale/_layout/privacy'
+    | '/$locale/_layout/reset-password'
     | '/$locale/_layout/subscribe'
     | '/admin/_layout/cockpit'
     | '/admin/_layout/login'
@@ -421,11 +446,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LocaleLayoutSubscribeRouteImport
       parentRoute: typeof LocaleLayoutRoute
     }
+    '/$locale/_layout/reset-password': {
+      id: '/$locale/_layout/reset-password'
+      path: '/reset-password'
+      fullPath: '/$locale/reset-password'
+      preLoaderRoute: typeof LocaleLayoutResetPasswordRouteImport
+      parentRoute: typeof LocaleLayoutRoute
+    }
     '/$locale/_layout/privacy': {
       id: '/$locale/_layout/privacy'
       path: '/privacy'
       fullPath: '/$locale/privacy'
       preLoaderRoute: typeof LocaleLayoutPrivacyRouteImport
+      parentRoute: typeof LocaleLayoutRoute
+    }
+    '/$locale/_layout/orders': {
+      id: '/$locale/_layout/orders'
+      path: '/orders'
+      fullPath: '/$locale/orders'
+      preLoaderRoute: typeof LocaleLayoutOrdersRouteImport
       parentRoute: typeof LocaleLayoutRoute
     }
     '/$locale/_layout/order': {
@@ -463,7 +502,9 @@ interface LocaleLayoutRouteChildren {
   LocaleLayoutAboutRoute: typeof LocaleLayoutAboutRoute
   LocaleLayoutHistoryRoute: typeof LocaleLayoutHistoryRoute
   LocaleLayoutOrderRoute: typeof LocaleLayoutOrderRoute
+  LocaleLayoutOrdersRoute: typeof LocaleLayoutOrdersRoute
   LocaleLayoutPrivacyRoute: typeof LocaleLayoutPrivacyRoute
+  LocaleLayoutResetPasswordRoute: typeof LocaleLayoutResetPasswordRoute
   LocaleLayoutSubscribeRoute: typeof LocaleLayoutSubscribeRoute
   LocaleLayoutIndexRoute: typeof LocaleLayoutIndexRoute
 }
@@ -472,7 +513,9 @@ const LocaleLayoutRouteChildren: LocaleLayoutRouteChildren = {
   LocaleLayoutAboutRoute: LocaleLayoutAboutRoute,
   LocaleLayoutHistoryRoute: LocaleLayoutHistoryRoute,
   LocaleLayoutOrderRoute: LocaleLayoutOrderRoute,
+  LocaleLayoutOrdersRoute: LocaleLayoutOrdersRoute,
   LocaleLayoutPrivacyRoute: LocaleLayoutPrivacyRoute,
+  LocaleLayoutResetPasswordRoute: LocaleLayoutResetPasswordRoute,
   LocaleLayoutSubscribeRoute: LocaleLayoutSubscribeRoute,
   LocaleLayoutIndexRoute: LocaleLayoutIndexRoute,
 }

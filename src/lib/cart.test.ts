@@ -51,7 +51,7 @@ describe("writeCart / readCart", () => {
   it("stamps a version and a timestamp", () => {
     writeCart(cart);
     const raw = JSON.parse(store.get(KEY)!);
-    expect(raw.version).toBe(1);
+    expect(raw.version).toBe(2);
     expect(typeof raw.savedAt).toBe("number");
   });
 
@@ -82,6 +82,16 @@ describe("readCart rejects carts it shouldn't restore", () => {
     expect(readCart()).toBeNull();
   });
 
+  it("drops a version 1 cart, which could not tell 'chose pickup' from 'never chose'", () => {
+    store.set(KEY, JSON.stringify({ ...cart, version: 1, savedAt: Date.now() }));
+    expect(readCart()).toBeNull();
+  });
+
+  it("round-trips a cart where nothing has been chosen yet", () => {
+    writeCart({ ...cart, fulfillmentType: null });
+    expect(readCart()?.fulfillmentType).toBeNull();
+  });
+
   it("ignores a cart with no version at all", () => {
     store.set(KEY, JSON.stringify({ ...cart, savedAt: Date.now() }));
     expect(readCart()).toBeNull();
@@ -95,13 +105,13 @@ describe("readCart rejects carts it shouldn't restore", () => {
   it("rejects a blob whose quantities aren't an object", () => {
     store.set(
       KEY,
-      JSON.stringify({ ...cart, quantities: "nope", version: 1, savedAt: Date.now() }),
+      JSON.stringify({ ...cart, quantities: "nope", version: 2, savedAt: Date.now() }),
     );
     expect(readCart()).toBeNull();
   });
 
   it("rejects a non-numeric savedAt", () => {
-    store.set(KEY, JSON.stringify({ ...cart, version: 1, savedAt: "yesterday" }));
+    store.set(KEY, JSON.stringify({ ...cart, version: 2, savedAt: "yesterday" }));
     expect(readCart()).toBeNull();
   });
 });

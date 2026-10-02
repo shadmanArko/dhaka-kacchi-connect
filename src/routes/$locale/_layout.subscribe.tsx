@@ -4,6 +4,13 @@ import type { Locale } from "@/lib/i18n";
 import { pageHead } from "@/lib/seo";
 
 export const Route = createFileRoute("/$locale/_layout/subscribe")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    confirm: typeof search.confirm === "string" ? search.confirm : undefined,
+  }),
   head: ({ params }) => pageHead("/subscribe", params.locale as Locale, "seo.subscribe"),
-  component: SubscribePage,
+  component: SubscribeRoute,
 });
+
+function SubscribeRoute() {
+  return <SubscribePage confirmToken={Route.useSearch().confirm} />;
+}
