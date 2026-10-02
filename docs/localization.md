@@ -66,12 +66,15 @@ Say you're adding Arabic (`ar`, RTL):
 3. **Add it to the static build's route list.** In
    `scripts/build-static.mjs`, add `"ar"` to the locales array in the
    `["de"].flatMap((locale) => ...)` line near the end of `ROUTES`.
-4. **Font/script support, if needed.** Cormorant Garamond + DM Sans (loaded
-   in `src/routes/__root.tsx`'s `head().links`) are Latin-only. A script
-   they don't cover (Arabic, Bengali, ...) needs a paired font added to that
-   same Google Fonts `<link>` — this is a manual design decision (which Noto
-   family, whether to load it only for that locale to avoid paying its
-   weight on every other page), not something this system does for you.
+4. **Font/script support, if needed.** Cormorant Garamond + DM Sans are
+   self-hosted, Latin-subset woff2 files in `src/assets/fonts/`, declared by
+   the `@font-face` rules at the top of `src/styles.css` (the two
+   above-the-fold faces are also `<link rel="preload">`ed in
+   `src/routes/__root.tsx`). They don't cover a script like Arabic or
+   Bengali; that needs a paired font self-hosted the same way (a new
+   `@font-face` with a `unicode-range`, ideally loaded only on that
+   locale's pages) — a manual design decision (which Noto family, whether to
+   pay its weight on every page), not something this system does for you.
    Flag it to Arko/design before writing code.
 5. **Rebuild and look at it for real:**
    ```bash

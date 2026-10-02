@@ -12,6 +12,8 @@ import { useEffect, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import appCss from "../styles.css?url";
+import dmSansUrl from "@/assets/fonts/dm-sans-latin.woff2?url";
+import cormorantUrl from "@/assets/fonts/cormorant-garamond-latin-normal.woff2?url";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { SiteFooter } from "@/components/layout/SiteFooter";
 import { FloatingSocial } from "@/components/layout/FloatingSocial";
@@ -153,8 +155,23 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     links: [
       { rel: "stylesheet", href: appCss },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
-      { rel: "preconnect", href: "https://fonts.googleapis.com" },
-      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
+      // Fonts are self-hosted (@font-face in styles.css). Preload the two
+      // faces every page paints above the fold - body copy and the serif
+      // headline. Fonts are only discovered once the CSS has been fetched AND
+      // parsed, which puts them behind the stylesheet in the waterfall;
+      // preloading starts them in parallel with it. crossOrigin is required
+      // even for same-origin fonts: font fetches are CORS-mode, and without it
+      // the preload is downloaded twice (once ignored, once used). The italic
+      // serif is deliberately not preloaded - it is only the accent word in a
+      // heading, and a third preload would compete with the hero image.
+      { rel: "preload", as: "font", type: "font/woff2", href: dmSansUrl, crossOrigin: "anonymous" },
+      {
+        rel: "preload",
+        as: "font",
+        type: "font/woff2",
+        href: cormorantUrl,
+        crossOrigin: "anonymous",
+      },
       // Both are separate origins contacted from mount effects - the API on
       // every page with a session, PostHog on every page full stop. Without
       // these the DNS + TLS + TCP handshake is paid serially at the moment
@@ -162,16 +179,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       // render until a cold connection to the API completes.
       { rel: "preconnect", href: "https://api.dhakakacchi.com" },
       { rel: "preconnect", href: "https://eu.i.posthog.com" },
-      {
-        // Weights audited against actual usage. Dropped: serif 500, 600 and
-        // italic 600 (zero `font-serif font-medium/semibold` in the codebase)
-        // and DM Sans italic (every <em> is forced to serif italic). ADDED:
-        // sans 500 and 600, which are used 28 and 10 times across the admin UI
-        // and were never requested - the browser was synthesising faux-bold
-        // for them.
-        rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap",
-      },
     ],
   }),
   shellComponent: RootShell,
