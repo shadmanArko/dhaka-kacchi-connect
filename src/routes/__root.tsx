@@ -17,7 +17,13 @@ import { SiteFooter } from "@/components/layout/SiteFooter";
 import { FloatingSocial } from "@/components/layout/FloatingSocial";
 import { ConsentBanner } from "@/components/ConsentBanner";
 import { SessionProvider } from "@/hooks/useSession";
-import { initAnalytics, trackPageview, trackWarehouseEvent } from "@/lib/analytics";
+import {
+  captureInternalFlag,
+  initAnalytics,
+  setAdminMode,
+  trackPageview,
+  trackWarehouseEvent,
+} from "@/lib/analytics";
 import { SITE_URL } from "@/lib/seo";
 import { captureUtmFromLocation } from "@/lib/utmCapture";
 import i18n, { DEFAULT_LOCALE, localeDir, type Locale } from "@/lib/i18n";
@@ -220,10 +226,12 @@ function Analytics() {
     // very first URL carried, independent of consent and of PostHog's own
     // (async, chunked) load - see utmCapture.ts.
     captureUtmFromLocation();
+    captureInternalFlag();
     initAnalytics();
   }, []);
 
   useEffect(() => {
+    setAdminMode(isAdminRoute);
     if (isAdminRoute) return;
     trackPageview();
     trackWarehouseEvent("page_view");

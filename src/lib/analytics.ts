@@ -71,6 +71,36 @@ const POSTHOG_HOST = import.meta.env.VITE_POSTHOG_HOST ?? "https://eu.i.posthog.
  * adminSession.ts documents: one key, one owner, no shared blob. */
 const CONSENT_KEY = "dhaka-kacchi-consent";
 
+/**
+ * Per-browser opt-out for the owner/testers. Visit any page with
+ * ?internal=1 once to switch analytics off on that browser for good
+ * (?internal=0 switches it back on). Lives in localStorage, so it covers
+ * this device's browser only - which is exactly what "exclude my device" means.
+ */
+const INTERNAL_KEY = "dhaka-kacchi-internal";
+
+function isInternalDevice(): boolean {
+  try {
+    return localStorage.getItem(INTERNAL_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+/** Reads ?internal=1|0 from the URL and persists it. Call before initAnalytics(). */
+export function captureInternalFlag(): void {
+  try {
+    const flag = new URLSearchParams(window.location.search).get("internal");
+    if (flag === "1") localStorage.setItem(INTERNAL_KEY, "1");
+    else if (flag === "0") localStorage.removeItem(INTERNAL_KEY);
+  } catch {
+    // Storage unavailable - the device simply isn't excluded.
+  }
+}
+
+/** True while the owner is inside /admin. Capture stays off until they leave. */
+let adminPaused = false;
+
 type ConsentChoice = "granted" | "denied";
 type PostHog = typeof import("posthog-js").default;
 
@@ -140,7 +170,7 @@ function applyConsent(ph: PostHog, choice: ConsentChoice | null): void {
 /** Queues until the SDK is ready, then runs. A no-op when analytics isn't
  * configured, which is the whole of local dev. */
 function withPostHog(fn: (ph: PostHog) => void): void {
-  if (!POSTHOG_KEY) return;
+  if (!POSTHOG_KEY || isInternalDevice() || adminPaused) return;
   if (posthog) {
     fn(posthog);
     return;
@@ -149,7 +179,7 @@ function withPostHog(fn: (ph: PostHog) => void): void {
 }
 
 export function initAnalytics(): void {
-  if (loading || !POSTHOG_KEY) return;
+  if (loading || !POSTHOG_KEY || isInternalDevice()) return;
 
   // Deliberately fire-and-forget rather than async: every caller is an
   // effect that must not block paint, and the signature stays synchronous
@@ -185,6 +215,7 @@ export function initAnalytics(): void {
       applyConsent(ph, readConsent());
 
       posthog = ph;
+      syncAdminPause(ph);
       for (const fn of pending.splice(0)) fn(ph);
     })
     .catch(() => {
@@ -203,6 +234,38 @@ export function initAnalytics(): void {
 export function hasRespondedToConsent(): boolean {
   if (!POSTHOG_KEY) return true;
   return readConsent() !== null;
+}
+
+/**
+ * Silences everything PostHog does on its own while the owner is in /admin:
+ * pageleave, heatmaps, autocapture and - the important one - session
+ * recording, which would otherwise film the admin panel for anyone who
+ * accepted the banner. Restored when they navigate back to the public site.
+ */
+export function setAdminMode(inAdmin: boolean): void {
+  adminPaused = inAdmin;
+  if (posthog) syncAdminPause(posthog);
+}
+
+let configBeforeAdmin: { autocapture: unknown } | null = null;
+
+/** Brings the SDK's own background capture in line with `adminPaused`. Also
+ * called right after init, so a page load that lands directly on /admin is
+ * silenced before applyConsent's startSessionRecording can matter. */
+function syncAdminPause(ph: PostHog): void {
+  if (adminPaused) {
+    configBeforeAdmin ??= { autocapture: ph.config.autocapture };
+    ph.stopSessionRecording();
+    ph.set_config({ capture_pageleave: false, capture_heatmaps: false, autocapture: false });
+  } else if (configBeforeAdmin) {
+    ph.set_config({
+      capture_pageleave: true,
+      capture_heatmaps: true,
+      autocapture: configBeforeAdmin.autocapture as boolean,
+    });
+    configBeforeAdmin = null;
+    if (readConsent() === "granted") ph.startSessionRecording();
+  }
 }
 
 export function giveConsent(): void {
@@ -272,7 +335,7 @@ export function trackWarehouseEvent(
   properties?: Record<string, unknown>,
   orderId?: string,
 ): void {
-  if (readConsent() !== "granted") return;
+  if (readConsent() !== "granted" || isInternalDevice() || adminPaused) return;
   const utm = getSessionUtm();
   api
     .trackEvent({
