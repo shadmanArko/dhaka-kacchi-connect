@@ -141,11 +141,22 @@ export const Route = createRootRoute({
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      {
+        name: "twitter:title",
+        content: "Dhaka Kacchi Berlin — Authentic Kacchi Biriyani & Borhani",
+      },
+      {
+        name: "twitter:description",
+        content:
+          "Berlin's only authentic Kacchi Biriyani and Borhani. Cooked fresh every Saturday — order by Friday 6pm.",
+      },
       { property: "og:site_name", content: "Dhaka Kacchi Berlin" },
+      // Root-level og:*/twitter:* are the English floor for routes that call
+      // no pageHead() (the 404 page, /orders, /reset-password, admin). Every
+      // public page calls pageHead(), which overrides these per language
+      // (og:locale, og:image:alt, titles/descriptions) - meta merges
+      // leaf-wins, deduped on `name ?? property`.
       { property: "og:locale", content: "en_US" },
-      // Root-level og:title/og:description are the floor for routes that set
-      // neither (/privacy, and the 404 page). Routes that define their own
-      // override these - meta merges leaf-wins, deduped on `name ?? property`.
       {
         property: "og:title",
         content: "Dhaka Kacchi Berlin — Authentic Kacchi Biriyani & Borhani",
