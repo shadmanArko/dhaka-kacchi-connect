@@ -28,7 +28,7 @@ export function SiteFooter() {
       <div className="font-sans text-[0.76rem] leading-[1.8] text-muted-warm text-center">
         {t("footer.tagline", { location: t("footer.location") })}
         <br />
-        <span className="text-surface-foreground/60">
+        <span className="text-muted-warm">
           © {new Date().getFullYear()} {site.name} · {t("footer.rights")}
         </span>
       </div>
@@ -59,7 +59,7 @@ export function SiteFooter() {
           {site.website} · {t("footer.berlin")}
         </span>
         <br />
-        <LocaleLink to="/privacy" className="text-surface-foreground/60 no-underline hover:underline">
+        <LocaleLink to="/privacy" className="text-muted-warm no-underline hover:underline">
           {t("footer.privacy")}
         </LocaleLink>
       </div>
