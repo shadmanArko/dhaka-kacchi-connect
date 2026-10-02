@@ -1,8 +1,7 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
   Link,
-  createRootRouteWithContext,
+  createRootRoute,
   useLocation,
   useRouter,
   HeadContent,
@@ -12,6 +11,8 @@ import { useEffect, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import appCss from "../styles.css?url";
+import dmSansUrl from "@/assets/fonts/dm-sans-latin.woff2?url";
+import cormorantUrl from "@/assets/fonts/cormorant-garamond-latin-normal.woff2?url";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { SiteFooter } from "@/components/layout/SiteFooter";
 import { FloatingSocial } from "@/components/layout/FloatingSocial";
@@ -26,7 +27,7 @@ import {
 } from "@/lib/analytics";
 import { SITE_URL } from "@/lib/seo";
 import { captureUtmFromLocation } from "@/lib/utmCapture";
-import i18n, { DEFAULT_LOCALE, localeDir, type Locale } from "@/lib/i18n";
+import i18n, { loadLocale, localeDir, localeFromPathname, type Locale } from "@/lib/i18n";
 
 /** Every route's URL is the single source of truth for which language is
  * shown. This used to be synced from beforeLoad, which seemed right (it
@@ -47,13 +48,18 @@ import i18n, { DEFAULT_LOCALE, localeDir, type Locale } from "@/lib/i18n";
  * speculative preload - so RootShell (below) reads it directly and
  * resyncs i18next synchronously at the top of render, before any child
  * calls t(). That covers SSR (the "current" location IS the request) and
- * every real client-side navigation, without the preload false positive. */
-function localeFromPathname(pathname: string): Locale {
-  return pathname === "/de" || pathname.startsWith("/de/") ? "de" : DEFAULT_LOCALE;
-}
-
+ * every real client-side navigation, without the preload false positive.
+ *
+ * beforeLoad (see Route below) still has a job here, but only a harmless one:
+ * it LOADS the destination language's strings (loadLocale in lib/i18n.ts)
+ * and never switches the active language. Switching stays here, so a
+ * speculative preload can warm the German chunk without re-rendering the
+ * page in German. */
 function syncLocale(pathname: string): Locale {
   const locale = localeFromPathname(pathname);
+  // Language not loaded (its chunk failed to fetch - see beforeLoad below):
+  // stay in the language we have instead of rendering raw keys.
+  if (!i18n.hasResourceBundle(locale, "translation")) return i18n.language as Locale;
   if (i18n.language !== locale) void i18n.changeLanguage(locale);
   return locale;
 }
@@ -111,7 +117,17 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   );
 }
 
-export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+export const Route = createRootRoute({
+  // Make sure the language this navigation is going TO is loaded before the
+  // route renders (a no-op unless the visitor is switching language - the
+  // page's own language is loaded before hydration, see lib/i18n.ts). If the
+  // chunk can't be fetched (offline, or replaced by a deploy under an open
+  // tab) the navigation still completes and syncLocale() simply stays in the
+  // current language, rather than turning a language switch into an error
+  // page.
+  beforeLoad: async ({ location }) => {
+    await loadLocale(localeFromPathname(location.pathname)).catch(() => undefined);
+  },
   head: () => ({
     meta: [
       { charSet: "utf-8" },
@@ -125,11 +141,22 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      {
+        name: "twitter:title",
+        content: "Dhaka Kacchi Berlin — Authentic Kacchi Biriyani & Borhani",
+      },
+      {
+        name: "twitter:description",
+        content:
+          "Berlin's only authentic Kacchi Biriyani and Borhani. Cooked fresh every Saturday — order by Friday 6pm.",
+      },
       { property: "og:site_name", content: "Dhaka Kacchi Berlin" },
+      // Root-level og:*/twitter:* are the English floor for routes that call
+      // no pageHead() (the 404 page, /orders, /reset-password, admin). Every
+      // public page calls pageHead(), which overrides these per language
+      // (og:locale, og:image:alt, titles/descriptions) - meta merges
+      // leaf-wins, deduped on `name ?? property`.
       { property: "og:locale", content: "en_US" },
-      // Root-level og:title/og:description are the floor for routes that set
-      // neither (/privacy, and the 404 page). Routes that define their own
-      // override these - meta merges leaf-wins, deduped on `name ?? property`.
       {
         property: "og:title",
         content: "Dhaka Kacchi Berlin — Authentic Kacchi Biriyani & Borhani",
@@ -153,8 +180,23 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     links: [
       { rel: "stylesheet", href: appCss },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
-      { rel: "preconnect", href: "https://fonts.googleapis.com" },
-      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
+      // Fonts are self-hosted (@font-face in styles.css). Preload the two
+      // faces every page paints above the fold - body copy and the serif
+      // headline. Fonts are only discovered once the CSS has been fetched AND
+      // parsed, which puts them behind the stylesheet in the waterfall;
+      // preloading starts them in parallel with it. crossOrigin is required
+      // even for same-origin fonts: font fetches are CORS-mode, and without it
+      // the preload is downloaded twice (once ignored, once used). The italic
+      // serif is deliberately not preloaded - it is only the accent word in a
+      // heading, and a third preload would compete with the hero image.
+      { rel: "preload", as: "font", type: "font/woff2", href: dmSansUrl, crossOrigin: "anonymous" },
+      {
+        rel: "preload",
+        as: "font",
+        type: "font/woff2",
+        href: cormorantUrl,
+        crossOrigin: "anonymous",
+      },
       // Both are separate origins contacted from mount effects - the API on
       // every page with a session, PostHog on every page full stop. Without
       // these the DNS + TLS + TCP handshake is paid serially at the moment
@@ -162,16 +204,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       // render until a cold connection to the API completes.
       { rel: "preconnect", href: "https://api.dhakakacchi.com" },
       { rel: "preconnect", href: "https://eu.i.posthog.com" },
-      {
-        // Weights audited against actual usage. Dropped: serif 500, 600 and
-        // italic 600 (zero `font-serif font-medium/semibold` in the codebase)
-        // and DM Sans italic (every <em> is forced to serif italic). ADDED:
-        // sans 500 and 600, which are used 28 and 10 times across the admin UI
-        // and were never requested - the browser was synthesising faux-bold
-        // for them.
-        rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap",
-      },
     ],
   }),
   shellComponent: RootShell,
@@ -248,13 +280,12 @@ function Analytics() {
 // app, so this one pathname check is it - see routes/admin/_layout.tsx for
 // the admin section's own (much simpler) chrome.
 function RootComponent() {
-  const { queryClient } = Route.useRouteContext();
   const { pathname } = useLocation();
   const { t } = useTranslation();
   const isAdminRoute = pathname.startsWith("/admin");
 
   return (
-    <QueryClientProvider client={queryClient}>
+    <>
       <SessionProvider>
         <Analytics />
         {!isAdminRoute && (
@@ -264,6 +295,7 @@ function RootComponent() {
                 content. Visually hidden until focused, then a normal button. */}
             <a
               href="#main"
+              data-menu-inert
               className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:bg-gold focus:px-6 focus:py-3 focus:font-sans focus:text-[0.78rem] focus:uppercase focus:tracking-[0.2em] focus:text-black-ink"
             >
               {t("common.skipToContent")}
@@ -273,11 +305,11 @@ function RootComponent() {
             <ConsentBanner />
           </>
         )}
-        <main id="main">
+        <main id="main" data-menu-inert>
           <Outlet />
         </main>
         {!isAdminRoute && <SiteFooter />}
       </SessionProvider>
-    </QueryClientProvider>
+    </>
   );
 }

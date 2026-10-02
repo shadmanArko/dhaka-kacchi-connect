@@ -67,10 +67,13 @@ async function main() {
         setDotted(resources[locale], key, value);
       } else if (locale !== SOURCE_LOCALE) {
         (missingTranslation[locale] ??= []).push(key);
-        // No fallback baked into the JSON itself - i18next's own
-        // fallbackLng (configured in src/lib/i18n.ts) resolves this at
-        // runtime, so a later CSV edit that fills the cell in doesn't
-        // need this script to remember which keys it had to paper over.
+        // Fall back to the source text HERE, in the generated JSON, rather
+        // than at runtime. src/lib/i18n.ts loads only the active language
+        // (the others are separate lazy chunks), so a runtime fallback to
+        // English would force every non-English page to download English
+        // too. The JSON is regenerated on every build, so a later CSV edit
+        // that fills the cell in simply replaces this.
+        setDotted(resources[locale], key, sourceValue);
       }
     }
   }
@@ -96,8 +99,8 @@ async function main() {
   );
   for (const [locale, keys] of Object.entries(missingTranslation)) {
     console.warn(
-      `i18n: ${locale} is missing ${keys.length} translation(s), falling back to ${SOURCE_LOCALE} at ` +
-        `runtime: ${keys.join(", ")}`,
+      `i18n: ${locale} is missing ${keys.length} translation(s), using the ${SOURCE_LOCALE} text instead:` +
+        ` ${keys.join(", ")}`,
     );
   }
 }

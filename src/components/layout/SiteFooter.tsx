@@ -3,17 +3,22 @@ import { site } from "@/content/site";
 import { LocaleLink } from "@/components/layout/LocaleLink";
 import { buildWaLink } from "@/lib/whatsapp";
 import { trackWarehouseEvent } from "@/lib/analytics";
-import logo from "@/assets/logo-nav.png";
+import logo from "@/assets/photos/logo-nav.webp";
 
 export function SiteFooter() {
   const { t } = useTranslation();
   return (
-    <footer className="grid grid-cols-1 md:grid-cols-3 items-center gap-6 border-t border-line bg-deep px-6 md:px-14 py-14 text-center md:text-left">
+    <footer
+      data-menu-inert
+      className="grid grid-cols-1 md:grid-cols-3 items-center gap-6 border-t border-line bg-deep px-6 md:px-14 py-14 text-center md:text-left"
+    >
       <div className="flex justify-center md:justify-start">
-        <LocaleLink to="/" aria-label={`${site.name} — Home`}>
+        <LocaleLink to="/" aria-label={t("a11y.homeLink", { name: site.name })}>
           <img
             src={logo}
             alt={site.name}
+            width={216}
+            height={144}
             className="h-14 w-auto object-contain opacity-85 hover:opacity-100 transition-opacity"
             style={{ filter: "invert(1) sepia(1) saturate(2) hue-rotate(5deg) brightness(1.1)" }}
           />
@@ -23,7 +28,7 @@ export function SiteFooter() {
       <div className="font-sans text-[0.76rem] leading-[1.8] text-muted-warm text-center">
         {t("footer.tagline", { location: t("footer.location") })}
         <br />
-        <span className="text-surface-foreground/60">
+        <span className="text-muted-warm">
           © {new Date().getFullYear()} {site.name} · {t("footer.rights")}
         </span>
       </div>
@@ -54,10 +59,7 @@ export function SiteFooter() {
           {site.website} · {t("footer.berlin")}
         </span>
         <br />
-        <LocaleLink
-          to="/privacy"
-          className="text-surface-foreground/60 no-underline hover:underline"
-        >
+        <LocaleLink to="/privacy" className="text-muted-warm no-underline hover:underline">
           {t("footer.privacy")}
         </LocaleLink>
       </div>

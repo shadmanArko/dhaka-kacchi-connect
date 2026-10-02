@@ -13,6 +13,7 @@
     "format": "prettier --write .",
     "test": "VITE_API_BASE_URL=https://test.invalid bun test src/",
     "i18n:build": "node scripts/i18n/build-locales.mjs",
+    "images:build": "node scripts/images/build-images.mjs",
     "predev": "node scripts/i18n/build-locales.mjs",
     "prebuild": "node scripts/i18n/build-locales.mjs",
     "pretest": "node scripts/i18n/build-locales.mjs"
@@ -28,7 +29,6 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "@sentry/react": "^10.74.0",
     "@tailwindcss/vite": "^4.2.1",
-    "@tanstack/react-query": "^5.101.1",
     "@tanstack/react-router": "^1.170.16",
     "@tanstack/react-start": "^1.168.26",
     "@tanstack/router-plugin": "^1.168.18",
@@ -64,6 +64,7 @@
     "globals": "^15.15.0",
     "nitro": "3.0.260603-beta",
     "prettier": "^3.7.3",
+    "sharp": "^0.35.5",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.56.1",
     "vite": "^8.0.16"

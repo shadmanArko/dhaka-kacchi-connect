@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link } from "@tanstack/react-router";
+import { useTranslation } from "react-i18next";
+import { LocaleLink } from "@/components/layout/LocaleLink";
 import { giveConsent, hasRespondedToConsent, withdrawConsent } from "@/lib/analytics";
 
 /**
@@ -10,6 +11,7 @@ import { giveConsent, hasRespondedToConsent, withdrawConsent } from "@/lib/analy
  * buttons, no pre-ticked box, Reject exactly as easy to find as Accept).
  */
 export function ConsentBanner() {
+  const { t } = useTranslation();
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -38,15 +40,18 @@ export function ConsentBanner() {
   return (
     <div
       role="region"
-      aria-label="Cookie consent"
+      aria-label={t("a11y.cookieConsent")}
       className="fixed inset-x-0 bottom-0 z-[45] border-t border-line bg-black-ink/97 backdrop-blur-sm px-6 py-6 md:px-10"
     >
       <div className="mx-auto flex max-w-[900px] flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="font-sans text-[0.82rem] leading-[1.7] text-muted-warm">
-          We use privacy-friendly, EU-hosted analytics to see how the site is used and improve it.{" "}
-          <Link to="/privacy" className="text-gold underline underline-offset-4 hover:text-gold-2">
-            Learn more
-          </Link>
+          {t("consent.text")}{" "}
+          <LocaleLink
+            to="/privacy"
+            className="text-gold underline underline-offset-4 hover:text-gold-2"
+          >
+            {t("consent.learnMore")}
+          </LocaleLink>
           .
         </p>
         <div className="flex shrink-0 gap-3">
@@ -55,14 +60,14 @@ export function ConsentBanner() {
             onClick={reject}
             className="flex-1 border border-line px-6 py-3 font-sans text-[0.72rem] uppercase tracking-[0.2em] text-cream transition-colors hover:border-gold/50 sm:flex-none"
           >
-            Reject
+            {t("consent.reject")}
           </button>
           <button
             type="button"
             onClick={accept}
             className="flex-1 bg-gold px-6 py-3 font-sans text-[0.72rem] uppercase tracking-[0.2em] text-black-ink transition-colors hover:bg-gold-2 sm:flex-none"
           >
-            Accept
+            {t("consent.accept")}
           </button>
         </div>
       </div>

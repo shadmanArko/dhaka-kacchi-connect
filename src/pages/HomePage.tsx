@@ -9,7 +9,6 @@ import { Timeline } from "@/components/sections/Timeline";
 import { CTASection } from "@/components/sections/CTASection";
 import { SocialSection } from "@/components/sections/SocialSection";
 import { getWhyUs } from "@/content/whyUs";
-import kacchiBorhani from "@/assets/Kacchi-and-Borhani.jpg";
 
 /** Shared by both the English route (routes/index.tsx) and the German one
  * (routes/$locale/_layout.index.tsx) - see src/routes/$locale/_layout.tsx
@@ -46,7 +45,7 @@ export function HomePage() {
         paragraphs={[t("home.story.p1"), t("home.story.p2")]}
         quote={t("home.story.quote")}
         tags={t("home.story.tags").split("|")}
-        image={{ url: kacchiBorhani, alt: "Kacchi and Borhani — Dhaka Kacchi Berlin" }}
+        image={{ name: "kacchi-and-borhani", alt: t("alt.home.story") }}
         badge={{ value: t("home.story.badgeValue"), label: t("home.story.badgeLabel") }}
       />
       <FoodSpotlight />

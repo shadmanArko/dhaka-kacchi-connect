@@ -58,17 +58,56 @@ export function localeLinks(routePath: string, locale: Locale) {
  * is a plain function, not a component, and the locale it must describe is
  * this ROUTE's own (from its file), not whatever i18next's current language
  * happens to be at the moment head() runs.
+ *
+ * Everything that varies by language lives here, not in __root.tsx's
+ * English-only floor: og:locale (plus og:locale:alternate for every other
+ * shipped language, which is how Facebook/WhatsApp find the other variants),
+ * the translated og:image:alt, and twitter:title/description (mirroring the
+ * og:* text, since not every client falls back from twitter:* to og:*).
+ * `options.jsonLd` adds a structured-data block (see lib/structuredData.ts).
  */
-export function pageHead(routePath: string, locale: Locale, seoKey: string) {
+export function pageHead(
+  routePath: string,
+  locale: Locale,
+  seoKey: string,
+  options: { jsonLd?: unknown } = {},
+) {
   const t = i18n.getFixedT(locale);
+  const ogTitle = t(`${seoKey}.ogTitle`);
+  const ogDescription = t(`${seoKey}.ogDescription`);
+  const imageAlt = t("seo.ogImageAlt");
   return {
     meta: [
       { title: t(`${seoKey}.title`) },
       { name: "description", content: t(`${seoKey}.description`) },
-      { property: "og:title", content: t(`${seoKey}.ogTitle`) },
-      { property: "og:description", content: t(`${seoKey}.ogDescription`) },
+      { property: "og:title", content: ogTitle },
+      { property: "og:description", content: ogDescription },
       { property: "og:url", content: canonical(routePath, locale) },
+      { property: "og:locale", content: OG_LOCALE[locale] },
+      ...ALL_LOCALES.filter((other) => other !== locale).map((other) => ({
+        property: "og:locale:alternate",
+        content: OG_LOCALE[other],
+      })),
+      { property: "og:image:alt", content: imageAlt },
+      { name: "twitter:title", content: ogTitle },
+      { name: "twitter:description", content: ogDescription },
+      { name: "twitter:image:alt", content: imageAlt },
     ],
     links: localeLinks(routePath, locale),
+    ...(options.jsonLd ? { scripts: [jsonLdScript(options.jsonLd)] } : {}),
+  };
+}
+
+/** Open Graph's locale codes are language_TERRITORY, not the bare tag the URL
+ * uses. Typed as a Record so adding a locale to SUPPORTED_LOCALES fails the
+ * typecheck until its og:locale is filled in. */
+const OG_LOCALE: Record<Locale, string> = { en: "en_US", de: "de_DE" };
+
+/** A JSON-LD block as the `scripts` entry TanStack Router renders into
+ * <head>. `<` is escaped so a string value can never contain `</script>`. */
+export function jsonLdScript(data: unknown) {
+  return {
+    type: "application/ld+json",
+    children: JSON.stringify(data).replace(/</g, "\\u003c"),
   };
 }
