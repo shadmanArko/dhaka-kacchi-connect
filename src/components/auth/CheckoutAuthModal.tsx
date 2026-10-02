@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/DkButton";
 import { useSession } from "@/hooks/useSession";
@@ -18,10 +18,23 @@ import { trackEvent } from "@/lib/analytics";
  */
 
 const inputClass =
-  "w-full px-4 py-4 bg-gold/[0.06] border border-line-strong text-cream placeholder:text-muted-warm font-sans text-base outline-none focus:border-gold/50 transition-colors";
+  "w-full min-w-0 px-4 py-4 bg-gold/[0.06] border border-line-strong text-cream placeholder:text-muted-warm font-sans text-base outline-none focus:border-gold/50 transition-colors";
 
 const linkClass =
   "font-sans text-[0.78rem] text-gold hover:text-gold-2 underline underline-offset-4";
+
+/** Returns "YYYY-MM-DD" for a real calendar date in the past, otherwise "". */
+function toIsoDate(day: string, month: string, year: string): string {
+  if (!day || !month || year.length !== 4) return "";
+  const d = Number(day);
+  const m = Number(month);
+  const y = Number(year);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  const valid =
+    date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
+  if (!valid || y < 1900 || date.getTime() > Date.now()) return "";
+  return `${year}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
 
 type Step = "start" | "login" | "register" | "otp" | "forgot-password" | "forgot-password-sent";
 
@@ -43,7 +56,18 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
   // Register fields
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
-  const [dateOfBirth, setDateOfBirth] = useState("");
+  // Three plain numeric fields, not <input type="date">: the native control
+  // overflows its container on iOS Safari and renders unusably small mm/dd/yyyy
+  // segments on Android Chrome - customers could not fill it and abandoned.
+  const [dobDay, setDobDay] = useState("");
+  const [dobMonth, setDobMonth] = useState("");
+  const [dobYear, setDobYear] = useState("");
+  const monthRef = useRef<HTMLInputElement>(null);
+  const yearRef = useRef<HTMLInputElement>(null);
+  const dateOfBirth = useMemo(
+    () => toIsoDate(dobDay, dobMonth, dobYear),
+    [dobDay, dobMonth, dobYear],
+  );
   const [street, setStreet] = useState("");
   const [houseNumber, setHouseNumber] = useState("");
   const [postalCode, setPostalCode] = useState("");
@@ -98,7 +122,9 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
   function resetRegistrationDraft() {
     setPhone("");
     setName("");
-    setDateOfBirth("");
+    setDobDay("");
+    setDobMonth("");
+    setDobYear("");
     setStreet("");
     setHouseNumber("");
     setPostalCode("");
@@ -137,6 +163,10 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
 
   async function submitRegister(e: React.FormEvent) {
     e.preventDefault();
+    if (!dateOfBirth) {
+      setError("Please enter a valid date of birth (day, month and 4-digit year).");
+      return;
+    }
     setBusy(true);
     setError("");
     setNotice("");
@@ -251,7 +281,7 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
       }}
     >
       <DialogContent
-        className="bg-black-ink border-line rounded-none sm:rounded-none max-w-md max-h-[90vh] overflow-y-auto"
+        className="bg-black-ink border-line rounded-none sm:rounded-none max-w-md max-h-[90dvh] overflow-y-auto overflow-x-hidden"
         // Tapping/clicking outside is a common accidental gesture on mobile
         // (dismissing the keyboard, say) - it shouldn't silently discard a
         // half-finished login/registration. Only the explicit X button (or
@@ -360,23 +390,62 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
               onChange={(e) => setName(e.target.value)}
               className={`ph-no-capture ${inputClass}`}
             />
-            <div className="space-y-1.5">
-              <label
-                htmlFor="dateOfBirth"
-                className="block font-sans text-[0.68rem] uppercase tracking-[0.3em] text-gold-3"
-              >
+            <fieldset className="space-y-1.5 min-w-0">
+              <legend className="block font-sans text-[0.68rem] uppercase tracking-[0.3em] text-gold-3">
                 Date of birth
-              </label>
-              <input
-                id="dateOfBirth"
-                type="date"
-                required
-                autoComplete="bday"
-                value={dateOfBirth}
-                onChange={(e) => setDateOfBirth(e.target.value)}
-                className={`ph-no-capture ${inputClass}`}
-              />
-            </div>
+              </legend>
+              <div className="grid grid-cols-[1fr_1fr_1.6fr] gap-3">
+                <input
+                  type="text"
+                  required
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={2}
+                  placeholder="DD"
+                  aria-label="Day of birth"
+                  autoComplete="bday-day"
+                  value={dobDay}
+                  onChange={(e) => {
+                    const v = e.target.value.replace(/\D/g, "");
+                    setDobDay(v);
+                    if (v.length === 2) monthRef.current?.focus();
+                  }}
+                  className={`ph-no-capture min-w-0 text-center ${inputClass}`}
+                />
+                <input
+                  ref={monthRef}
+                  type="text"
+                  required
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={2}
+                  placeholder="MM"
+                  aria-label="Month of birth"
+                  autoComplete="bday-month"
+                  value={dobMonth}
+                  onChange={(e) => {
+                    const v = e.target.value.replace(/\D/g, "");
+                    setDobMonth(v);
+                    if (v.length === 2) yearRef.current?.focus();
+                  }}
+                  className={`ph-no-capture min-w-0 text-center ${inputClass}`}
+                />
+                <input
+                  ref={yearRef}
+                  type="text"
+                  required
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={4}
+                  placeholder="YYYY"
+                  aria-label="Year of birth"
+                  autoComplete="bday-year"
+                  value={dobYear}
+                  onChange={(e) => setDobYear(e.target.value.replace(/\D/g, ""))}
+                  className={`ph-no-capture min-w-0 text-center ${inputClass}`}
+                />
+              </div>
+            </fieldset>
             <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3">
               <input
                 type="text"
@@ -438,6 +507,7 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
               required
               minLength={8}
               placeholder="Set a password (min. 8 characters)"
+              aria-label="Password"
               autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
