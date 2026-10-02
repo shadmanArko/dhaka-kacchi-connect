@@ -16,68 +16,168 @@
  * undercut that entirely.
  *
  * Same "optional integration degrades gracefully" rule as everything else
- * here - with no DSN set, initSentry() returns before Sentry.init and every
- * Sentry call in the app is an inert no-op, so local dev needs no account.
+ * here - with no DSN set, initSentry() returns before anything is loaded and
+ * every call in this file is an inert no-op, so local dev needs no account.
+ *
+ * LOADING STRATEGY. The SDK is ~32 KB gzipped, which is a lot to put in the
+ * entry chunk of a marketing page for something that fires on a tiny
+ * fraction of visits. So it is NOT imported statically: initSentry() installs
+ * two tiny window listeners ('error', 'unhandledrejection'), schedules the
+ * real SDK to load after the page has finished loading and the browser is
+ * idle, and buffers whatever goes wrong in the meantime. When the SDK
+ * arrives it is initialised with exactly the same config as before, the
+ * listeners are removed (the SDK installs its own), and the buffered errors
+ * are replayed into it. If an error is buffered before the SDK has started
+ * loading, loading starts immediately instead of waiting for idle - errors
+ * are rare, so the cost is only ever paid by a visit that actually needs it,
+ * and the report is not left to race the tab being closed.
+ *
+ * What is lost compared with initialising at module scope: breadcrumbs from
+ * before the SDK loaded (clicks, fetches in the first second or two). The
+ * errors themselves, with stacks, are not lost.
+ *
+ * Application code must therefore report through captureException() below,
+ * not `import * as Sentry from "@sentry/react"` - a static import of the SDK
+ * anywhere on the entry path would put it straight back in the entry chunk,
+ * and a direct Sentry.captureException() before the SDK is initialised is a
+ * silent no-op. (src/pages/OrderPage.tsx still imports the SDK directly; see
+ * the note on captureException.) The SDK and its configuration live in
+ * ./sentry-sdk.ts, the one module this file lazy-loads.
  */
-import * as Sentry from "@sentry/react";
+import type { CaptureHint } from "./sentry-sdk";
 
 const DSN = import.meta.env.VITE_SENTRY_DSN;
 
-let initialized = false;
+type Hint = CaptureHint;
+type Pending = { error: unknown; hint?: Hint };
+type Capture = (error: unknown, hint?: Hint) => unknown;
 
-/** Default fetch/xhr breadcrumbs record the FULL url, query string included.
- * On this app that means /v1/admin/customers/search?identifier=+4917... (a
- * real customer's phone or email) and /v1/postal-code-check?postalCode=...
- * (a partial address) would be attached to every error report.
- * sendDefaultPii:false does not touch query strings - this does. */
-function beforeBreadcrumb(crumb: Sentry.Breadcrumb): Sentry.Breadcrumb | null {
-  if (crumb.category === "fetch" || crumb.category === "xhr") {
-    const url = crumb.data?.url;
-    if (typeof url === "string") {
-      crumb.data = { ...crumb.data, url: url.split("?")[0] };
-    }
+/** Enough to keep the first few errors of a bad page load, small enough that
+ * a render loop throwing every frame cannot grow memory while the SDK loads.
+ * The earliest errors are kept (they are usually the root cause). */
+const MAX_BUFFERED = 10;
+/** Hard ceiling on how long the SDK load waits for the browser to go idle. */
+const IDLE_TIMEOUT_MS = 3000;
+/** If the window 'load' event hasn't fired by now (a very slow image), load
+ * the SDK anyway rather than waiting on it. */
+const LOAD_EVENT_GRACE_MS = 6000;
+
+let state: "idle" | "scheduled" | "loading" | "ready" | "failed" = "idle";
+let sdk: Capture | undefined;
+const buffer: Pending[] = [];
+
+function push(error: unknown, hint?: Hint): void {
+  if (buffer.length < MAX_BUFFERED) buffer.push({ error, hint });
+}
+
+/** Report an error. Safe to call at any time, including before the SDK has
+ * loaded (the error is buffered and replayed) and with no DSN (no-op).
+ *
+ * NOTE: src/pages/OrderPage.tsx currently calls Sentry.captureException
+ * directly. That works once this module has loaded the SDK (it is the same
+ * module instance) but silently drops anything reported before then; it
+ * should be switched to this function. */
+export function captureException(error: unknown, hint?: Hint): void {
+  if (sdk) {
+    sdk(error, hint);
+    return;
   }
-  // Console breadcrumbs re-capture whatever was logged, which includes
-  // __root.tsx's ErrorComponent console.error(error) and would include any
-  // future console.log of a form value. The exception itself carries the
-  // stack; the console echo adds only risk.
-  if (crumb.category === "console") return null;
-  return crumb;
+  if (!DSN || typeof window === "undefined" || state === "failed") return;
+  push(error, hint);
+  // First error before the SDK is on its way: stop waiting for idle.
+  if (state === "idle" || state === "scheduled") void loadSdk();
+}
+
+// --- early-error listeners -------------------------------------------------
+
+function onWindowError(event: ErrorEvent): void {
+  let error: unknown = event.error;
+  if (!(error instanceof Error)) {
+    // Resource/cross-origin errors arrive as a bare message. The SDK's own
+    // handler would build an exception from message + location; do the same,
+    // and let ignoreErrors (ResizeObserver noise etc.) filter it as usual.
+    const message = event.message || "Unknown error";
+    const synthetic = new Error(message);
+    synthetic.stack = `Error: ${message}\n    at ${event.filename}:${event.lineno}:${event.colno}`;
+    error = synthetic;
+  }
+  captureException(error, {
+    mechanism: { type: "auto.browser.global_handlers.onerror", handled: false },
+  });
+}
+
+function onUnhandledRejection(event: PromiseRejectionEvent): void {
+  // Non-Error rejections are dropped here. The SDK would wrap them as
+  // "Non-Error promise rejection captured ...", which ignoreErrors in
+  // loadSdk() already discards - same outcome, without buffering noise.
+  if (!(event.reason instanceof Error)) return;
+  captureException(event.reason, {
+    mechanism: { type: "auto.browser.global_handlers.onunhandledrejection", handled: false },
+  });
+}
+
+function removeEarlyListeners(): void {
+  window.removeEventListener("error", onWindowError);
+  window.removeEventListener("unhandledrejection", onUnhandledRejection);
+}
+
+// --- deferred SDK load -----------------------------------------------------
+
+async function loadSdk(): Promise<void> {
+  if (!DSN || state === "loading" || state === "ready" || state === "failed") return;
+  state = "loading";
+  try {
+    // The SDK and its configuration (DSN, release, PII scrubbing,
+    // ignoreErrors) live in sentry-sdk.ts - a separate module so the bundler
+    // can tree-shake the SDK down to the calls we use.
+    const { startSentry } = await import("./sentry-sdk");
+    const capture = startSentry(DSN);
+    sdk = capture;
+    state = "ready";
+    // The SDK's globalHandlers integration now owns these events; keeping ours
+    // would report every subsequent error twice.
+    removeEarlyListeners();
+    for (const { error, hint } of buffer.splice(0)) capture(error, hint);
+  } catch {
+    // Offline, blocked by an extension, or a stale chunk after a deploy. Error
+    // tracking is best-effort: drop the buffer rather than retry in a loop.
+    state = "failed";
+    buffer.length = 0;
+    removeEarlyListeners();
+  }
+}
+
+/** Run `fn` once the page has finished loading and the main thread is idle. */
+function whenIdle(fn: () => void): void {
+  const idle = () => {
+    if (typeof window.requestIdleCallback === "function") {
+      window.requestIdleCallback(fn, { timeout: IDLE_TIMEOUT_MS });
+    } else {
+      setTimeout(fn, 1500);
+    }
+  };
+  if (document.readyState === "complete") {
+    idle();
+    return;
+  }
+  let started = false;
+  const start = () => {
+    if (started) return;
+    started = true;
+    idle();
+  };
+  window.addEventListener("load", start, { once: true });
+  setTimeout(start, LOAD_EVENT_GRACE_MS);
 }
 
 export function initSentry(): void {
-  // Guarded on `window`, not deferred to a useEffect. This must run before
-  // React renders or hydrates: router.tsx's defaultOnCatch fires from
-  // componentDidCatch, which can precede the first effect flush, and
-  // captureException on an uninitialised SDK is a silent no-op - so the
-  // highest-value errors would be exactly the ones dropped. The window guard
-  // is what keeps this out of the Node prerender pass in
-  // scripts/build-static.mjs (analytics.ts solves the same constraint with an
-  // effect, which is fine there because a pageview has nothing to catch).
-  if (initialized || typeof window === "undefined" || !DSN) return;
-  initialized = true;
-
-  Sentry.init({
-    dsn: DSN,
-    environment: import.meta.env.VITE_SENTRY_ENVIRONMENT ?? "development",
-    // Set from the deploy commit SHA in CI, and matched by the source-map
-    // upload in vite.config.ts. If the two ever disagree, every stack frame
-    // silently stays minified - see the note in that file.
-    release: import.meta.env.VITE_SENTRY_RELEASE,
-    sendDefaultPii: false,
-    beforeBreadcrumb,
-    ignoreErrors: [
-      // Browser-extension and embedded-webview noise, never this app's code.
-      "ResizeObserver loop limit exceeded",
-      "ResizeObserver loop completed with undelivered notifications",
-      /^Non-Error promise rejection captured/,
-      // Specific to this deployment model: the FTP sync replaces hashed
-      // chunks under open tabs, so anyone mid-session during a deploy hits
-      // this on their next client-side navigation. It's real, but it means
-      // "we just deployed", not "there is a bug", and it would drown
-      // everything else. Revisit if it ever becomes a support problem.
-      /Failed to fetch dynamically imported module/,
-      /Importing a module script failed/,
-    ],
-  });
+  // Guarded on `window` so this stays out of the Node prerender pass in
+  // scripts/build-static.mjs. Called from router.tsx at module scope, before
+  // React hydrates: the listeners below must exist before the first thing can
+  // go wrong, which is why this is not deferred to a useEffect.
+  if (state !== "idle" || typeof window === "undefined" || !DSN) return;
+  state = "scheduled";
+  window.addEventListener("error", onWindowError);
+  window.addEventListener("unhandledrejection", onUnhandledRejection);
+  whenIdle(() => void loadSdk());
 }

@@ -39,10 +39,15 @@ for (const [name, widths] of Object.entries(PHOTOS)) {
   const master = sharp(path.join(SRC_DIR, `${name}.jpg`));
   const { width: masterWidth } = await master.metadata();
   for (const w of widths) {
-    if (w > masterWidth) throw new Error(`${name}: ${w}px is wider than the ${masterWidth}px master`);
+    if (w > masterWidth)
+      throw new Error(`${name}: ${w}px is wider than the ${masterWidth}px master`);
     const resized = () => master.clone().resize({ width: w, withoutEnlargement: true });
-    await resized().webp(WEBP).toFile(path.join(OUT_DIR, `${name}-${w}.webp`));
-    await resized().avif(AVIF).toFile(path.join(OUT_DIR, `${name}-${w}.avif`));
+    await resized()
+      .webp(WEBP)
+      .toFile(path.join(OUT_DIR, `${name}-${w}.webp`));
+    await resized()
+      .avif(AVIF)
+      .toFile(path.join(OUT_DIR, `${name}-${w}.avif`));
   }
 }
 
@@ -54,4 +59,6 @@ await sharp(path.join(SRC_DIR, "logo-nav.png"))
   .webp({ quality: 90, effort: 6 })
   .toFile(path.join(OUT_DIR, "logo-nav.webp"));
 
-console.log(`wrote ${(await readdir(OUT_DIR)).length} files to ${path.relative(process.cwd(), OUT_DIR)}`);
+console.log(
+  `wrote ${(await readdir(OUT_DIR)).length} files to ${path.relative(process.cwd(), OUT_DIR)}`,
+);
