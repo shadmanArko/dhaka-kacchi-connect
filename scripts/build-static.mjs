@@ -9,7 +9,7 @@
 // static files. Run `vite build` before this script - it expects
 // `.output/server/index.mjs` and `.output/public/` to already exist.
 import { spawn } from "node:child_process";
-import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 // Every route this app has. There's no automatic discovery (that's exactly
@@ -22,6 +22,8 @@ import path from "node:path";
 // each of TRANSLATED_ROUTES.map(route => `/${locale}${route}`) below - kept
 // as one flat list (not routes × locales nested) so checkRoutesComplete()
 // below can still diff it directly against routeTree.gen.ts's full path set.
+const TRANSLATED_LOCALES = ["de"];
+
 const ROUTES = [
   "/",
   "/about",
@@ -55,7 +57,7 @@ const ROUTES = [
   // has one file per entry here - see that directory for the full list).
   // Adding a language later is: add it to SUPPORTED_LOCALES, add its column
   // to src/locales/translations.csv, and this array grows on its own.
-  ...["de"].flatMap((locale) =>
+  ...TRANSLATED_LOCALES.flatMap((locale) =>
     ["/", "/about", "/history", "/order", "/subscribe", "/privacy"].map((route) =>
       route === "/" ? `/${locale}` : `/${locale}${route}`,
     ),
@@ -149,8 +151,47 @@ async function waitForServer(url, timeoutMs = 15000) {
   throw new Error(`Server didn't respond at ${url} within ${timeoutMs}ms`);
 }
 
+// src/lib/i18n.ts loads each language as its own lazy chunk (en-<hash>.js,
+// de-<hash>.js) and AWAITS the page's language before hydrating. Left alone,
+// the browser only discovers that chunk after it has downloaded and run the
+// entry chunk - one extra round trip on the path to hydration. The chunk's
+// hashed name isn't known to the app's own code, but it is known here, so
+// every prerendered page gets a <link rel="modulepreload"> for its own
+// language and the fetch overlaps with the entry chunk instead. Fails the
+// build rather than silently shipping without the hint if the chunk can't be
+// found unambiguously (e.g. the naming convention changes).
+async function findLocaleChunks() {
+  const files = await readdir(path.resolve(".output/public/assets"));
+  const chunks = {};
+  for (const locale of ["en", ...TRANSLATED_LOCALES]) {
+    const pattern = new RegExp(`^${locale}-[A-Za-z0-9_-]{8}\\.js$`);
+    const matches = files.filter((f) => pattern.test(f));
+    if (matches.length !== 1) {
+      throw new Error(
+        `Expected exactly one "${locale}-<hash>.js" locale chunk in .output/public/assets, found ` +
+          `${matches.length} (${matches.join(", ") || "none"}). Did the chunk naming in ` +
+          `src/lib/i18n.ts change? Update findLocaleChunks() in scripts/build-static.mjs.`,
+      );
+    }
+    chunks[locale] = `/assets/${matches[0]}`;
+  }
+  return chunks;
+}
+
+function localeOfRoute(route) {
+  return TRANSLATED_LOCALES.find((l) => route === `/${l}` || route.startsWith(`/${l}/`)) ?? "en";
+}
+
+function withLocalePreload(html, chunkUrl) {
+  const out = html.replace("</head>", `<link rel="modulepreload" href="${chunkUrl}"/></head>`);
+  if (out === html)
+    throw new Error("Could not inject the locale modulepreload - no </head> found.");
+  return out;
+}
+
 async function main() {
   await checkRoutesComplete();
+  const localeChunks = await findLocaleChunks();
 
   await rm(OUTPUT_DIR, { recursive: true, force: true });
   await mkdir(OUTPUT_DIR, { recursive: true });
@@ -178,7 +219,7 @@ async function main() {
           `Route ${route} returned HTTP ${res.status} - refusing to ship a broken page`,
         );
       }
-      const html = await res.text();
+      const html = withLocalePreload(await res.text(), localeChunks[localeOfRoute(route)]);
       const dir = route === "/" ? OUTPUT_DIR : path.join(OUTPUT_DIR, route);
       await mkdir(dir, { recursive: true });
       await writeFile(path.join(dir, "index.html"), html, "utf8");
@@ -227,7 +268,11 @@ async function main() {
     if (notFoundWithNoindex === notFoundHtml) {
       throw new Error("Could not inject noindex into 404.html - no <head> tag found.");
     }
-    await writeFile(path.join(OUTPUT_DIR, "404.html"), notFoundWithNoindex, "utf8");
+    await writeFile(
+      path.join(OUTPUT_DIR, "404.html"),
+      withLocalePreload(notFoundWithNoindex, localeChunks.en),
+      "utf8",
+    );
     console.log(`  404.html -> branded not-found page`);
 
     console.log(`\nStatic site written to ${path.relative(process.cwd(), OUTPUT_DIR)}/`);

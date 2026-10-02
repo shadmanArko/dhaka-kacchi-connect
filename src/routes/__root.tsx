@@ -27,7 +27,7 @@ import {
 } from "@/lib/analytics";
 import { SITE_URL } from "@/lib/seo";
 import { captureUtmFromLocation } from "@/lib/utmCapture";
-import i18n, { DEFAULT_LOCALE, localeDir, type Locale } from "@/lib/i18n";
+import i18n, { loadLocale, localeDir, localeFromPathname, type Locale } from "@/lib/i18n";
 
 /** Every route's URL is the single source of truth for which language is
  * shown. This used to be synced from beforeLoad, which seemed right (it
@@ -48,13 +48,18 @@ import i18n, { DEFAULT_LOCALE, localeDir, type Locale } from "@/lib/i18n";
  * speculative preload - so RootShell (below) reads it directly and
  * resyncs i18next synchronously at the top of render, before any child
  * calls t(). That covers SSR (the "current" location IS the request) and
- * every real client-side navigation, without the preload false positive. */
-function localeFromPathname(pathname: string): Locale {
-  return pathname === "/de" || pathname.startsWith("/de/") ? "de" : DEFAULT_LOCALE;
-}
-
+ * every real client-side navigation, without the preload false positive.
+ *
+ * beforeLoad (see Route below) still has a job here, but only a harmless one:
+ * it LOADS the destination language's strings (loadLocale in lib/i18n.ts)
+ * and never switches the active language. Switching stays here, so a
+ * speculative preload can warm the German chunk without re-rendering the
+ * page in German. */
 function syncLocale(pathname: string): Locale {
   const locale = localeFromPathname(pathname);
+  // Language not loaded (its chunk failed to fetch - see beforeLoad below):
+  // stay in the language we have instead of rendering raw keys.
+  if (!i18n.hasResourceBundle(locale, "translation")) return i18n.language as Locale;
   if (i18n.language !== locale) void i18n.changeLanguage(locale);
   return locale;
 }
@@ -113,6 +118,16 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 }
 
 export const Route = createRootRoute({
+  // Make sure the language this navigation is going TO is loaded before the
+  // route renders (a no-op unless the visitor is switching language - the
+  // page's own language is loaded before hydration, see lib/i18n.ts). If the
+  // chunk can't be fetched (offline, or replaced by a deploy under an open
+  // tab) the navigation still completes and syncLocale() simply stays in the
+  // current language, rather than turning a language switch into an error
+  // page.
+  beforeLoad: async ({ location }) => {
+    await loadLocale(localeFromPathname(location.pathname)).catch(() => undefined);
+  },
   head: () => ({
     meta: [
       { charSet: "utf-8" },

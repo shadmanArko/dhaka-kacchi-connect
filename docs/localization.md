@@ -51,18 +51,23 @@ Say you're adding Arabic (`ar`, RTL):
 
 1. **Add a column to `src/locales/translations.csv`.** Every existing row
    gets an `ar` cell. You don't have to fill in every translation on day
-   one — a blank cell falls back to English at runtime and the build script
-   just warns about it (see "How the build script behaves" below). English
+   one — a blank cell is filled with the English text by the build script
+   (which warns about it), so the page still reads sensibly. English
    itself must never be blank for any row.
 2. **Register the locale in `src/lib/i18n.ts`:**
    - Add `"ar"` to `SUPPORTED_LOCALES`.
    - If it's RTL, add `"ar"` to the `RTL_LOCALES` set.
-   - Add `import ar from "@/locales/generated/ar.json";` and add
-     `ar: { translation: ar }` to the `resources` object passed to
-     `i18next.init()`. (Resources are bundled statically, not fetched at
-     runtime — see the comment above that call for why: this is a fully
-     static site with no server to fetch a locale bundle from at request
-     time.)
+   - Add `ar: () => import("@/locales/generated/ar.json")` to the `loaders`
+     map. Each language is its own lazy chunk: a visitor downloads only the
+     language of the page they are on (loaded before hydration, so there is
+     no flash of the wrong language), and another language is fetched only
+     when they switch to it — `beforeLoad` in `src/routes/__root.tsx` calls
+     `loadLocale()` for the destination, which only loads strings and never
+     changes the active language (that stays in `syncLocale()`). The static
+     build also adds a `<link rel="modulepreload">` for the page's language
+     chunk (`findLocaleChunks()` in `scripts/build-static.mjs`) so the fetch
+     overlaps with the entry chunk; it fails the build if it can't find the
+     `ar-<hash>.js` chunk, which is your cue if you rename things.
 3. **Add it to the static build's route list.** In
    `scripts/build-static.mjs`, add `"ar"` to the locales array in the
    `["de"].flatMap((locale) => ...)` line near the end of `ROUTES`.
