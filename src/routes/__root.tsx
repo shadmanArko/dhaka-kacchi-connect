@@ -295,6 +295,7 @@ function RootComponent() {
                 content. Visually hidden until focused, then a normal button. */}
             <a
               href="#main"
+              data-menu-inert
               className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:bg-gold focus:px-6 focus:py-3 focus:font-sans focus:text-[0.78rem] focus:uppercase focus:tracking-[0.2em] focus:text-black-ink"
             >
               {t("common.skipToContent")}
@@ -304,7 +305,7 @@ function RootComponent() {
             <ConsentBanner />
           </>
         )}
-        <main id="main">
+        <main id="main" data-menu-inert>
           <Outlet />
         </main>
         {!isAdminRoute && <SiteFooter />}
