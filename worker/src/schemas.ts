@@ -8,6 +8,7 @@
 import { z } from "@hono/zod-openapi";
 import { isE164 } from "./lib/auth";
 import { dateOfBirthError } from "./lib/dateOfBirth";
+import { normalizePhone } from "./lib/phone";
 
 export const MenuItemSchema = z
   .object({
@@ -18,15 +19,26 @@ export const MenuItemSchema = z
   })
   .openapi("MenuItem");
 
+/** Trims BEFORE checking length, so a field containing only spaces is
+ * rejected with a clear message instead of passing as non-empty and being
+ * stored (or failing later) as "". Max lengths stop absurd payloads. */
+const trimmedString = (label: string, max: number) =>
+  z
+    .string()
+    .trim()
+    .min(1, `${label} is required.`)
+    .max(max, `${label} is too long (max ${max} characters).`);
+
 export const DeliveryAddressSchema = z
   .object({
-    street: z.string().min(1).openapi({ example: "Alexanderstraße" }),
-    houseNumber: z.string().min(1).openapi({ example: "1" }),
+    street: trimmedString("Street", 100).openapi({ example: "Alexanderstraße" }),
+    houseNumber: trimmedString("House number", 20).openapi({ example: "1" }),
     postalCode: z
       .string()
+      .trim()
       .regex(/^\d{5}$/, "Postal code must be a 5-digit German PLZ.")
       .openapi({ example: "10178" }),
-    city: z.string().min(1).openapi({ example: "Berlin" }),
+    city: trimmedString("City", 60).openapi({ example: "Berlin" }),
   })
   .openapi("DeliveryAddress");
 
@@ -101,8 +113,8 @@ export const OrderInputSchema = z
     // requires a logged-in account (see authMiddleware.ts), and the server
     // always takes the locked email/phone from that account, never the
     // request body.
-    customerName: z.string().min(1),
-    notes: z.string().optional(),
+    customerName: trimmedString("Name", 100),
+    notes: z.string().trim().max(1000, "Notes are too long (max 1000 characters).").optional(),
   })
   .openapi("OrderInput");
 
@@ -144,6 +156,15 @@ export const PhoneSchema = z
   .refine(isE164, "Phone number must be in international format, e.g. +491701234567.")
   .openapi({ example: "+491701234567" });
 
+// Input-side phone: accepts how people actually write numbers ("0170 1234567",
+// "+49 170 1234567") and normalises to E.164 before validating. PhoneSchema
+// above stays strict for data we produce ourselves.
+const PhoneInputSchema = z
+  .string()
+  .transform(normalizePhone)
+  .pipe(PhoneSchema)
+  .openapi({ example: "0170 1234567", description: "Any common German/international format" });
+
 const DateOfBirthSchema = z
   .string()
   .superRefine((value, ctx) => {
@@ -169,11 +190,11 @@ export const OtpChannelSchema = z.enum(["sms", "email"]);
 
 export const RegisterInputSchema = z
   .object({
-    phone: PhoneSchema,
-    name: z.string().min(1),
+    phone: PhoneInputSchema,
+    name: trimmedString("Name", 100),
     dateOfBirth: DateOfBirthSchema,
     address: DeliveryAddressSchema,
-    email: z.string().email(),
+    email: z.string().trim().email().max(254),
     password: PasswordSchema,
   })
   .openapi("RegisterInput");
@@ -196,7 +217,7 @@ export const RegisterResultSchema = z
 
 export const VerifyOtpInputSchema = z
   .object({
-    phone: PhoneSchema,
+    phone: PhoneInputSchema,
     code: z
       .string()
       .length(6)
@@ -440,8 +461,8 @@ export const AdminCustomerSearchResultSchema = z
 // - see customersRepository usage in index.ts).
 export const AdminNewCustomerInputSchema = z
   .object({
-    phone: PhoneSchema,
-    name: z.string().min(1),
+    phone: PhoneInputSchema,
+    name: trimmedString("Name", 100),
     email: z.string().email().optional(),
     dateOfBirth: DateOfBirthSchema.optional(),
     address: DeliveryAddressSchema.optional(),
@@ -648,3 +669,16 @@ export const PredictPostResultSchema = z
     topReasons: z.array(PredictReasonSchema),
   })
   .openapi("PredictPostResult");
+
+export const SubscribeInputSchema = z
+  .object({
+    email: z.string().trim().toLowerCase().email("Please enter a valid email address.").max(254),
+    locale: z.enum(["en", "de"]).default("en"),
+  })
+  .openapi("SubscribeInput");
+
+export const SubscribeConfirmInputSchema = z
+  .object({ token: z.string().min(20).max(200) })
+  .openapi("SubscribeConfirmInput");
+
+export const OkResultSchema = z.object({ ok: z.literal(true) }).openapi("OkResult");

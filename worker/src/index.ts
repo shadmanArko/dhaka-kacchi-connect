@@ -30,6 +30,7 @@ import { requireAdminAuth, type AdminAuthVariables } from "./lib/adminAuthMiddle
 import { createPostgresAdminUsersRepository } from "./lib/adminUsersRepository";
 import { createPostgresAdminSessionsRepository } from "./lib/adminSessionsRepository";
 import { sendOtpSms } from "./lib/berlinSms";
+import { normalizePhone } from "./lib/phone";
 import { toPublicCustomer, type AddressFields, type CustomerRecord } from "./lib/customers";
 import { createPostgresCustomersRepository } from "./lib/customersRepository";
 import {
@@ -44,9 +45,12 @@ import {
   sendOrderUpdatedEmail,
   sendOtpEmail,
   sendPasswordResetEmail,
+  sendSubscriptionConfirmationEmail,
 } from "./lib/email";
 import { emitOrderCreated } from "./lib/orderEvents";
 import { createPostgresEventsRepository } from "./lib/eventsRepository";
+import { createPostgresSubscribersRepository } from "./lib/subscribersRepository";
+import { createRateLimiter } from "./lib/rateLimiter";
 import { OrderValidationError, priceOrder, totalCents, type OrderRecord } from "./lib/orders";
 import { createPostgresOrdersRepository } from "./lib/ordersRepository";
 import { createPostgresOtpRepository } from "./lib/otpRepository";
@@ -105,6 +109,9 @@ import {
   RegisterInputSchema,
   RegisterResultSchema,
   VerifyOtpInputSchema,
+  SubscribeInputSchema,
+  SubscribeConfirmInputSchema,
+  OkResultSchema,
 } from "./schemas";
 
 // Wiring, done once at startup: the concrete Postgres repositories are
@@ -119,6 +126,11 @@ const passwordResetTokensRepository = createPostgresPasswordResetTokensRepositor
 const adminUsersRepository = createPostgresAdminUsersRepository(pool);
 const adminSessionsRepository = createPostgresAdminSessionsRepository(pool);
 const eventsRepository = createPostgresEventsRepository(pool);
+const subscribersRepository = createPostgresSubscribersRepository(pool);
+// Newsletter sign-ups: 5 per IP per hour is plenty for a person and stops the
+// endpoint being used to mail-bomb someone else's inbox.
+const subscribeLimiter = createRateLimiter(5, 60 * 60_000);
+const SUBSCRIBE_CONFIRM_TTL_DAYS = 7;
 // undefined when WAREHOUSE_DATABASE_URL isn't set (local dev, most likely)
 // - the reporting routes below check for this and answer 503, never crash
 // at startup over an integration nothing else in this app depends on.
@@ -633,7 +645,11 @@ const loginRoute = createRoute({
 });
 v1.openapi(loginRoute, async (c) => {
   const body = c.req.valid("json");
-  const identifier = body.identifier.trim().toLowerCase();
+  // Email logins are case-insensitive; anything else is treated as a phone
+  // number and normalised the same way registration stored it, so "0170 …"
+  // finds the account registered as "+49170 …".
+  const rawIdentifier = body.identifier.trim().toLowerCase();
+  const identifier = rawIdentifier.includes("@") ? rawIdentifier : normalizePhone(rawIdentifier);
   const invalidCredentials = () =>
     c.json(
       { error: "invalid_credentials", message: "Incorrect phone/email or password." },
@@ -1983,6 +1999,98 @@ v1.openapi(createEventRoute, async (c) => {
   });
 
   return c.json({ id }, 201);
+});
+
+const subscribeRoute = createRoute({
+  method: "post",
+  path: "/subscribe",
+  operationId: "subscribe",
+  summary: "Sign up for batch news (double opt-in: a confirmation email is sent)",
+  security: [], // deliberately public - fired from the anonymous /subscribe page
+  request: {
+    body: { content: { "application/json": { schema: SubscribeInputSchema } }, required: true },
+  },
+  responses: {
+    200: {
+      content: { "application/json": { schema: OkResultSchema } },
+      description:
+        "Accepted. Always the same answer, whether or not the address was already on the list.",
+    },
+    429: {
+      content: { "application/json": { schema: ErrorResponseSchema } },
+      description: "Too many sign-ups from this IP.",
+    },
+  },
+});
+v1.openapi(subscribeRoute, async (c) => {
+  const { email, locale } = c.req.valid("json");
+  const ipAddress = clientIp(c);
+  if (ipAddress && !subscribeLimiter.allow(ipAddress)) {
+    return c.json(
+      { error: "too_many_requests", message: "Too many sign-ups. Please try again later." },
+      429,
+    );
+  }
+
+  const token = generatePasswordResetToken();
+  const outcome = await subscribersRepository.upsertPending({
+    id: newId("sub"),
+    createdAt: new Date().toISOString(),
+    email,
+    locale,
+    tokenHash: hashToken(token),
+    expiresAt: new Date(Date.now() + SUBSCRIBE_CONFIRM_TTL_DAYS * 24 * 60 * 60_000),
+  });
+
+  // An address that already confirmed gets no email and the same answer, so
+  // this endpoint can't be used to find out who is on the list.
+  if (outcome !== "already_confirmed") {
+    const prefix = locale === "de" ? "/de" : "";
+    const confirmUrl = `${config.publicSiteUrl}${prefix}/subscribe/?confirm=${encodeURIComponent(token)}`;
+    await sendSubscriptionConfirmationEmail(email, confirmUrl, locale).catch((err) => {
+      Sentry.captureException(err);
+      console.error("sendSubscriptionConfirmationEmail failed:", err);
+    });
+  }
+  return c.json({ ok: true as const }, 200);
+});
+
+const subscribeConfirmRoute = createRoute({
+  method: "post",
+  path: "/subscribe/confirm",
+  operationId: "confirmSubscription",
+  summary: "Confirm a newsletter sign-up using the emailed link's token",
+  security: [], // the token in the emailed link IS the credential
+  request: {
+    body: {
+      content: { "application/json": { schema: SubscribeConfirmInputSchema } },
+      required: true,
+    },
+  },
+  responses: {
+    200: {
+      content: { "application/json": { schema: OkResultSchema } },
+      description: "Subscription confirmed.",
+    },
+    400: {
+      content: { "application/json": { schema: ErrorResponseSchema } },
+      description: "The link is invalid, already used, or expired.",
+    },
+  },
+});
+v1.openapi(subscribeConfirmRoute, async (c) => {
+  const { token } = c.req.valid("json");
+  const confirmed = await subscribersRepository.confirmByTokenHash(hashToken(token));
+  if (!confirmed) {
+    return c.json(
+      {
+        error: "invalid_token",
+        message: "This confirmation link is invalid or has expired. Please sign up again.",
+      },
+      400,
+    );
+  }
+  return c.json({ ok: true as const }, 200);
 });
 
 app.route("/v1", v1);

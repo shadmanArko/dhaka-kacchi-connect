@@ -42,6 +42,7 @@
 -- "TEXT for values only ever passed through," TIMESTAMPTZ for values SQL
 -- itself needs to reason about.
 
+DROP TABLE IF EXISTS subscribers;
 DROP TABLE IF EXISTS events;
 DROP TABLE IF EXISTS order_items;
 DROP TABLE IF EXISTS orders;
@@ -255,3 +256,18 @@ CREATE INDEX IF NOT EXISTS idx_events_event_name ON events(event_name);
 CREATE INDEX IF NOT EXISTS idx_events_occurred_at ON events(occurred_at);
 CREATE INDEX IF NOT EXISTS idx_events_customer_id ON events(customer_id) WHERE customer_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_events_ip_address_occurred_at ON events(ip_address, occurred_at);
+
+-- Newsletter list (added with migrations-manual/0003) - see that file's header
+-- for the double opt-in design.
+CREATE TABLE IF NOT EXISTS subscribers (
+  id                  TEXT PRIMARY KEY,           -- e.g. "sub_<uuid>"
+  created_at          TEXT NOT NULL,
+  email               TEXT NOT NULL,              -- lowercased
+  locale              TEXT NOT NULL DEFAULT 'en',
+  status              TEXT NOT NULL DEFAULT 'pending',
+  confirm_token_hash  TEXT,
+  confirm_expires_at  TIMESTAMPTZ,
+  confirmed_at        TIMESTAMPTZ
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_subscribers_email ON subscribers(email);
+CREATE INDEX IF NOT EXISTS idx_subscribers_confirm_token_hash ON subscribers(confirm_token_hash);

@@ -249,3 +249,54 @@ export function registerEmailNotifications(repository: OrdersRepository): void {
     await repository.markEmailSent(order.id, sent);
   });
 }
+
+/**
+ * The double opt-in email for the newsletter: nothing is sent to a subscriber
+ * until they click this. Like sendPasswordResetEmail it logs the link instead
+ * of failing when SMTP isn't configured, so the flow is testable locally.
+ */
+export async function sendSubscriptionConfirmationEmail(
+  email: string,
+  confirmUrl: string,
+  locale: "en" | "de",
+): Promise<boolean> {
+  const de = locale === "de";
+  if (!config.hostingerSmtpHost || !config.hostingerSmtpUser || !config.hostingerSmtpPass) {
+    console.log(
+      `[dev] HOSTINGER_SMTP_* not configured - subscription link for ${email}: ${confirmUrl}`,
+    );
+    return true;
+  }
+
+  await getTransporter().sendMail({
+    from: `"Dhaka Kacchi Berlin" <${config.orderFromEmail}>`,
+    to: email,
+    subject: de
+      ? "Bitte bestätigen Sie Ihre Anmeldung — Dhaka Kacchi Berlin"
+      : "Please confirm your subscription — Dhaka Kacchi Berlin",
+    text: (de
+      ? [
+          "Hallo,",
+          "",
+          "jemand hat diese E-Mail-Adresse für Neuigkeiten zur nächsten Charge von Dhaka Kacchi Berlin angemeldet. Bitte bestätigen Sie die Anmeldung mit diesem Link:",
+          confirmUrl,
+          "",
+          "Der Link ist 7 Tage gültig. Wenn Sie sich nicht angemeldet haben, ignorieren Sie diese E-Mail einfach — Sie erhalten dann nichts von uns.",
+          "",
+          "Dhaka Kacchi Berlin",
+        ]
+      : [
+          "Hi,",
+          "",
+          "Someone signed this email address up for news about the next Dhaka Kacchi Berlin batch. Please confirm with this link:",
+          confirmUrl,
+          "",
+          "The link is valid for 7 days. If you didn't sign up, just ignore this email — you won't hear from us.",
+          "",
+          "Dhaka Kacchi Berlin",
+        ]
+    ).join("\n"),
+  });
+
+  return true;
+}
