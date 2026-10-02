@@ -11,7 +11,7 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "test": "VITE_API_BASE_URL=https://test.invalid bun test src/",
+    "test": "VITE_API_BASE_URL=https://test.invalid bun test ./src/",
     "i18n:build": "node scripts/i18n/build-locales.mjs",
     "images:build": "node scripts/images/build-images.mjs",
     "predev": "node scripts/i18n/build-locales.mjs",

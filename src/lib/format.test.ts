@@ -22,6 +22,7 @@ describe("formatEuro / formatDate follow the language", () => {
 
   it("does not shift the day across timezones", async () => {
     await i18n.changeLanguage("en");
-    expect(formatDate("2026-09-19", "short")).toBe("19 Sep");
+    // ICU versions differ on the September abbreviation ("Sep" vs "Sept").
+    expect(formatDate("2026-09-19", "short")).toMatch(/^19 Sept?$/);
   });
 });
