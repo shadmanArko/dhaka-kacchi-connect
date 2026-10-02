@@ -7,6 +7,7 @@
  */
 import { z } from "@hono/zod-openapi";
 import { isE164 } from "./lib/auth";
+import { dateOfBirthError } from "./lib/dateOfBirth";
 
 export const MenuItemSchema = z
   .object({
@@ -143,6 +144,14 @@ export const PhoneSchema = z
   .refine(isE164, "Phone number must be in international format, e.g. +491701234567.")
   .openapi({ example: "+491701234567" });
 
+const DateOfBirthSchema = z
+  .string()
+  .superRefine((value, ctx) => {
+    const message = dateOfBirthError(value);
+    if (message) ctx.addIssue({ code: "custom", message });
+  })
+  .openapi({ example: "1990-05-14", description: "YYYY-MM-DD, a real past date" });
+
 const PasswordSchema = z.string().min(8, "Password must be at least 8 characters.");
 
 export const PublicCustomerSchema = z
@@ -162,7 +171,7 @@ export const RegisterInputSchema = z
   .object({
     phone: PhoneSchema,
     name: z.string().min(1),
-    dateOfBirth: z.string().openapi({ example: "1990-05-14", description: "YYYY-MM-DD" }),
+    dateOfBirth: DateOfBirthSchema,
     address: DeliveryAddressSchema,
     email: z.string().email(),
     password: PasswordSchema,
@@ -434,10 +443,7 @@ export const AdminNewCustomerInputSchema = z
     phone: PhoneSchema,
     name: z.string().min(1),
     email: z.string().email().optional(),
-    dateOfBirth: z
-      .string()
-      .optional()
-      .openapi({ example: "1990-05-14", description: "YYYY-MM-DD" }),
+    dateOfBirth: DateOfBirthSchema.optional(),
     address: DeliveryAddressSchema.optional(),
   })
   .openapi("AdminNewCustomerInput");

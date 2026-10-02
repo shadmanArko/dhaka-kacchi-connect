@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { validateDateOfBirth } from "@/lib/dateOfBirth";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/DkButton";
 import { useSession } from "@/hooks/useSession";
@@ -20,21 +21,10 @@ import { trackEvent } from "@/lib/analytics";
 const inputClass =
   "w-full min-w-0 px-4 py-4 bg-gold/[0.06] border border-line-strong text-cream placeholder:text-muted-warm font-sans text-base outline-none focus:border-gold/50 transition-colors";
 
+const invalidClass = "!border-red-400";
+
 const linkClass =
   "font-sans text-[0.78rem] text-gold hover:text-gold-2 underline underline-offset-4";
-
-/** Returns "YYYY-MM-DD" for a real calendar date in the past, otherwise "". */
-function toIsoDate(day: string, month: string, year: string): string {
-  if (!day || !month || year.length !== 4) return "";
-  const d = Number(day);
-  const m = Number(month);
-  const y = Number(year);
-  const date = new Date(Date.UTC(y, m - 1, d));
-  const valid =
-    date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
-  if (!valid || y < 1900 || date.getTime() > Date.now()) return "";
-  return `${year}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-}
 
 type Step = "start" | "login" | "register" | "otp" | "forgot-password" | "forgot-password-sent";
 
@@ -62,12 +52,24 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
   const [dobDay, setDobDay] = useState("");
   const [dobMonth, setDobMonth] = useState("");
   const [dobYear, setDobYear] = useState("");
+  const dayRef = useRef<HTMLInputElement>(null);
   const monthRef = useRef<HTMLInputElement>(null);
   const yearRef = useRef<HTMLInputElement>(null);
-  const dateOfBirth = useMemo(
-    () => toIsoDate(dobDay, dobMonth, dobYear),
+  // A field's error only shows once the customer has left it (or tried to
+  // submit) - never while they're still mid-typing "1" on the way to "15".
+  const [dobTouched, setDobTouched] = useState({ day: false, month: false, year: false });
+  const [dobSubmitAttempted, setDobSubmitAttempted] = useState(false);
+  const { iso: dateOfBirth, errors: dobErrors } = useMemo(
+    () => validateDateOfBirth(dobDay, dobMonth, dobYear),
     [dobDay, dobMonth, dobYear],
   );
+  const showDob = (field: "day" | "month" | "year") => dobSubmitAttempted || dobTouched[field];
+  const dayError = showDob("day") ? dobErrors.day : undefined;
+  const monthError = showDob("month") ? dobErrors.month : undefined;
+  const yearError = showDob("year") ? dobErrors.year : undefined;
+  const dateError =
+    showDob("year") && showDob("month") && showDob("day") ? dobErrors.date : undefined;
+  const dobMessage = dayError ?? monthError ?? yearError ?? dateError;
   const [street, setStreet] = useState("");
   const [houseNumber, setHouseNumber] = useState("");
   const [postalCode, setPostalCode] = useState("");
@@ -125,6 +127,8 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
     setDobDay("");
     setDobMonth("");
     setDobYear("");
+    setDobTouched({ day: false, month: false, year: false });
+    setDobSubmitAttempted(false);
     setStreet("");
     setHouseNumber("");
     setPostalCode("");
@@ -164,7 +168,9 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
   async function submitRegister(e: React.FormEvent) {
     e.preventDefault();
     if (!dateOfBirth) {
-      setError("Please enter a valid date of birth (day, month and 4-digit year).");
+      setDobSubmitAttempted(true);
+      const first = dobErrors.day ? dayRef : dobErrors.month ? monthRef : yearRef;
+      first.current?.focus();
       return;
     }
     setBusy(true);
@@ -396,13 +402,14 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
               </legend>
               <div className="grid grid-cols-[1fr_1fr_1.6fr] gap-3">
                 <input
+                  ref={dayRef}
                   type="text"
-                  required
                   inputMode="numeric"
-                  pattern="[0-9]*"
                   maxLength={2}
                   placeholder="DD"
                   aria-label="Day of birth"
+                  aria-invalid={!!(dayError ?? dateError)}
+                  aria-describedby={dobMessage ? "dob-error" : undefined}
                   autoComplete="bday-day"
                   value={dobDay}
                   onChange={(e) => {
@@ -410,17 +417,18 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
                     setDobDay(v);
                     if (v.length === 2) monthRef.current?.focus();
                   }}
-                  className={`ph-no-capture min-w-0 text-center ${inputClass}`}
+                  onBlur={() => setDobTouched((t) => ({ ...t, day: true }))}
+                  className={`ph-no-capture min-w-0 text-center ${inputClass} ${dayError || dateError ? invalidClass : ""}`}
                 />
                 <input
                   ref={monthRef}
                   type="text"
-                  required
                   inputMode="numeric"
-                  pattern="[0-9]*"
                   maxLength={2}
                   placeholder="MM"
                   aria-label="Month of birth"
+                  aria-invalid={!!(monthError ?? dateError)}
+                  aria-describedby={dobMessage ? "dob-error" : undefined}
                   autoComplete="bday-month"
                   value={dobMonth}
                   onChange={(e) => {
@@ -428,23 +436,30 @@ export function CheckoutAuthModal({ open, onClose }: { open: boolean; onClose: (
                     setDobMonth(v);
                     if (v.length === 2) yearRef.current?.focus();
                   }}
-                  className={`ph-no-capture min-w-0 text-center ${inputClass}`}
+                  onBlur={() => setDobTouched((t) => ({ ...t, month: true }))}
+                  className={`ph-no-capture min-w-0 text-center ${inputClass} ${monthError || dateError ? invalidClass : ""}`}
                 />
                 <input
                   ref={yearRef}
                   type="text"
-                  required
                   inputMode="numeric"
-                  pattern="[0-9]*"
                   maxLength={4}
                   placeholder="YYYY"
                   aria-label="Year of birth"
+                  aria-invalid={!!(yearError ?? dateError)}
+                  aria-describedby={dobMessage ? "dob-error" : undefined}
                   autoComplete="bday-year"
                   value={dobYear}
                   onChange={(e) => setDobYear(e.target.value.replace(/\D/g, ""))}
-                  className={`ph-no-capture min-w-0 text-center ${inputClass}`}
+                  onBlur={() => setDobTouched((t) => ({ ...t, year: true }))}
+                  className={`ph-no-capture min-w-0 text-center ${inputClass} ${yearError || dateError ? invalidClass : ""}`}
                 />
               </div>
+              {dobMessage && (
+                <p id="dob-error" role="alert" className="font-sans text-sm text-red-400">
+                  {dobMessage}
+                </p>
+              )}
             </fieldset>
             <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3">
               <input
