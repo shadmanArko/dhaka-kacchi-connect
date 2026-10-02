@@ -6,8 +6,6 @@ import { CTASection } from "@/components/sections/CTASection";
 import { Reveal } from "@/components/ui/Reveal";
 import { Eyebrow } from "@/components/ui/Typography";
 import { getValues } from "@/content/whyUs";
-import kacchi from "@/assets/kacchi.jpg";
-import borhani2 from "@/assets/borhani-2-web.jpg";
 
 export function AboutPage() {
   const { t } = useTranslation();
@@ -39,7 +37,7 @@ export function AboutPage() {
         paragraphs={[t("about.story1.p1"), t("about.story1.p2")]}
         quote={t("about.story1.quote")}
         tags={t("about.story1.tags").split("|")}
-        image={{ url: kacchi, alt: "Dhaka Kacchi Berlin" }}
+        image={{ name: "kacchi", alt: t("alt.about.kacchi") }}
         badge={{ value: t("about.story1.badgeValue"), label: t("about.story1.badgeLabel") }}
       />
 
@@ -56,7 +54,7 @@ export function AboutPage() {
         }
         paragraphs={[t("about.story2.p1"), t("about.story2.p2"), t("about.story2.p3")]}
         quote={t("about.story2.quote")}
-        image={{ url: borhani2, alt: "Borhani Berlin" }}
+        image={{ name: "borhani-2", alt: t("alt.about.borhani") }}
         badge={{ value: t("about.story2.badgeValue"), label: t("about.story2.badgeLabel") }}
       />
 

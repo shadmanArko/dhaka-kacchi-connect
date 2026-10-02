@@ -1,6 +1,8 @@
 import { type ReactNode } from "react";
 import { Reveal } from "@/components/ui/Reveal";
 import { Eyebrow, PullQuote, SectionTitle, Tag } from "@/components/ui/Typography";
+import { Photo } from "@/components/ui/Photo";
+import type { PhotoName } from "@/lib/photos";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -9,7 +11,7 @@ type Props = {
   paragraphs: string[];
   quote?: string;
   tags?: string[];
-  image: { url: string; alt: string };
+  image: { name: PhotoName; alt: string };
   badge?: { value: string; label: string };
   reverse?: boolean;
   background?: "black" | "deep";
@@ -43,11 +45,10 @@ export function StoryBlock({
         )}
       >
         <Reveal className="relative">
-          <img
-            src={image.url}
+          <Photo
+            name={image.name}
             alt={image.alt}
-            loading="lazy"
-            decoding="async"
+            sizes="(min-width: 1312px) 552px, (min-width: 768px) 42vw, 100vw"
             className="block w-full aspect-[4/3] object-cover border border-line rounded-[2px]"
           />
           {badge && (

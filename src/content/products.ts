@@ -1,6 +1,5 @@
 import type { TFunction } from "i18next";
-import kacchi from "@/assets/kacchi.jpg";
-import borhani from "@/assets/borhani-3-web.jpg";
+import type { PhotoName } from "@/lib/photos";
 
 export type Product = {
   number: string;
@@ -10,7 +9,7 @@ export type Product = {
   subtitle: string;
   description: string;
   tags: string[];
-  image: { url: string; alt: string };
+  image: { name: PhotoName; alt: string };
 };
 
 /** Translated at render time (locale-independent shape - images, numbers -
@@ -25,10 +24,7 @@ export function getProducts(t: TFunction): Product[] {
       subtitle: t("product.kacchi.subtitle"),
       description: t("product.kacchi.description"),
       tags: t("product.kacchi.tags").split("|"),
-      image: {
-        url: kacchi,
-        alt: "Kacchi Biriyani — Berlin's authentic slow-cooked mutton biriyani",
-      },
+      image: { name: "kacchi", alt: t("alt.product.kacchi") },
     },
     {
       number: "02",
@@ -38,7 +34,7 @@ export function getProducts(t: TFunction): Product[] {
       subtitle: t("product.borhani.subtitle"),
       description: t("product.borhani.description"),
       tags: t("product.borhani.tags").split("|"),
-      image: { url: borhani, alt: "Borhani — traditional Bangladeshi spiced yoghurt drink" },
+      image: { name: "borhani-3", alt: t("alt.product.borhani") },
     },
   ];
 }

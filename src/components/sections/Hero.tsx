@@ -3,8 +3,7 @@ import { useTranslation } from "react-i18next";
 import { LocaleButtonLink } from "@/components/layout/LocaleLink";
 import { Rings } from "@/components/ui/Rings";
 import { Tag } from "@/components/ui/Typography";
-import kacchi from "@/assets/kacchi.jpg";
-import kacchi900 from "@/assets/kacchi-900.jpg";
+import { Photo } from "@/components/ui/Photo";
 
 export function Hero() {
   const { t } = useTranslation();
@@ -53,25 +52,24 @@ export function Hero() {
 
       {/* Right: photo */}
       <div className="relative w-full lg:w-[48%] h-[55vw] min-h-[300px] lg:h-auto lg:min-h-full overflow-hidden shrink-0">
-        {/* This is the LCP element, so it's worth being precise. The 900w
-            variant is sized so a 2x phone actually picks it: at 390 CSS px the
-            browser needs 780px, and a 750w candidate was just under that, so
-            it fell back to the full 1313px file and the srcset bought nothing.
-            3x phones still take the 1313w, correctly. width/height give the
+        {/* This is the LCP element, so it's worth being precise. The
+            variants (480/800/1313 wide, AVIF + WebP - see lib/photos.ts) are
+            the SAME files the product card and the spotlight use for this
+            photo, so on a phone (all three slots ~100vw) it is downloaded
+            once. An 800w candidate covers a 2x phone (390 CSS px -> 780px
+            needed); 3x phones take the 1313w. width/height give the
             intrinsic ratio so the box is reserved and the hero doesn't shift
-            as it loads; fetchpriority marks it as the one image worth
-            fetching first. */}
-        <img
-          src={kacchi}
-          srcSet={`${kacchi900} 900w, ${kacchi} 1313w`}
+            as it loads. loading=eager + fetchpriority=high mark it as the one
+            image worth fetching first; a <link rel=preload> would add
+            nothing, because the prerendered HTML already contains this <img>
+            and the browser's preload scanner finds it immediately. */}
+        <Photo
+          name="kacchi"
           sizes="(min-width: 1024px) 48vw, 100vw"
-          width={1313}
-          height={1050}
-          alt="Dhaka Kacchi Biriyani Berlin — authentic slow-cooked kacchi"
+          alt={t("alt.hero")}
           className="absolute inset-0 w-full h-full object-cover object-[center_30%] animate-img-zoom"
           loading="eager"
           fetchPriority="high"
-          decoding="async"
         />
         <div
           className="absolute inset-0 z-[1]"

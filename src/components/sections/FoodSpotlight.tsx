@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { Reveal } from "@/components/ui/Reveal";
 import { getSpecs } from "@/content/timeline";
-import kacchi from "@/assets/kacchi.jpg";
+import { Photo } from "@/components/ui/Photo";
 
 export function FoodSpotlight() {
   const { t } = useTranslation();
@@ -9,11 +9,10 @@ export function FoodSpotlight() {
   return (
     <section className="border-t border-line bg-deep">
       <div className="relative h-[70vh] min-h-[480px] overflow-hidden flex items-center justify-center">
-        <img
-          src={kacchi}
-          alt="Kacchi Biriyani Berlin"
-          loading="lazy"
-          decoding="async"
+        <Photo
+          name="kacchi"
+          sizes="100vw"
+          alt={t("alt.spotlight")}
           className="absolute inset-0 w-full h-full object-cover object-[center_40%] animate-img-zoom"
         />
         <div

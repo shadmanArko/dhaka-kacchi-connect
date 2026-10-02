@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { Reveal } from "@/components/ui/Reveal";
 import { Eyebrow, SectionTitle } from "@/components/ui/Typography";
+import { Photo } from "@/components/ui/Photo";
 import { getProducts } from "@/content/products";
 
 export function ProductGrid() {
@@ -36,12 +37,11 @@ export function ProductGrid() {
             >
               {p.number}
             </span>
-            <img
-              src={p.image.url}
+            <Photo
+              name={p.image.name}
               alt={p.image.alt}
+              sizes="(min-width: 1312px) 600px, (min-width: 768px) 50vw, 100vw"
               className="block w-full aspect-[16/10] object-cover"
-              loading="lazy"
-              decoding="async"
             />
             <div className="flex-1 px-8 md:px-11 py-10 md:py-12">
               <span className="block font-sans text-[0.62rem] uppercase tracking-[0.35em] text-gold-3 mb-2.5">
