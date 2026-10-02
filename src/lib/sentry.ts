@@ -71,12 +71,7 @@ function push(error: unknown, hint?: Hint): void {
 }
 
 /** Report an error. Safe to call at any time, including before the SDK has
- * loaded (the error is buffered and replayed) and with no DSN (no-op).
- *
- * NOTE: src/pages/OrderPage.tsx currently calls Sentry.captureException
- * directly. That works once this module has loaded the SDK (it is the same
- * module instance) but silently drops anything reported before then; it
- * should be switched to this function. */
+ * loaded (the error is buffered and replayed) and with no DSN (no-op). */
 export function captureException(error: unknown, hint?: Hint): void {
   if (sdk) {
     sdk(error, hint);

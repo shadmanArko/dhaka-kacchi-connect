@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatEuro, formatDate } from "@/lib/format";
 import { useTranslation } from "react-i18next";
 import { MessageCircle, RefreshCw } from "lucide-react";
-import * as Sentry from "@sentry/react";
+import { captureException } from "@/lib/sentry";
 import { PageHero } from "@/components/sections/PageHero";
 import { Reveal } from "@/components/ui/Reveal";
 import { CheckoutAuthModal } from "@/components/auth/CheckoutAuthModal";
@@ -183,7 +183,7 @@ export function OrderPage() {
       // too and shows the customer "the server is unavailable" - a diagnosis
       // that is both wrong and unfalsifiable from the outside. Report it.
       .catch((err) => {
-        Sentry.captureException(err, { tags: { area: "order-page-load" } });
+        captureException(err, { tags: { area: "order-page-load" } });
         setLoadState("error");
       });
   }, [loadAttempt]);

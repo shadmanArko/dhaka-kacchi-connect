@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useLocation } from "@tanstack/react-router";
+import { useLocation } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { Menu, X } from "lucide-react";
 import { nav, orderCTA, site } from "@/content/site";
@@ -116,7 +116,7 @@ export function SiteHeader() {
               a signed-in customer's own order history isn't translated (see
               scripts/build-static.mjs ROUTES). */}
           {session.customer && (
-            <Link
+            <LocaleLink
               to="/orders"
               search={{ order: undefined }}
               activeProps={{ className: "text-gold" }}
@@ -124,7 +124,7 @@ export function SiteHeader() {
               className="font-sans text-[0.72rem] uppercase tracking-[0.15em] transition-colors whitespace-nowrap"
             >
               {t("nav.myOrders")}
-            </Link>
+            </LocaleLink>
           )}
           <LocaleLink
             to={orderCTA.to}
