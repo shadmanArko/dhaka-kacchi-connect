@@ -1,4 +1,3 @@
-import { QueryClient } from "@tanstack/react-query";
 import { createRouter } from "@tanstack/react-router";
 import * as Sentry from "@sentry/react";
 import { routeTree } from "./routeTree.gen";
@@ -12,11 +11,8 @@ import { initSentry } from "./lib/sentry";
 initSentry();
 
 export const getRouter = () => {
-  const queryClient = new QueryClient();
-
   const router = createRouter({
     routeTree,
-    context: { queryClient },
     scrollRestoration: true,
     defaultPreloadStaleTime: 0,
     // React 19's error boundaries do NOT rethrow to window.onerror, so

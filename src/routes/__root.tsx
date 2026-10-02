@@ -1,8 +1,7 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
   Link,
-  createRootRouteWithContext,
+  createRootRoute,
   useLocation,
   useRouter,
   HeadContent,
@@ -113,7 +112,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   );
 }
 
-export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+export const Route = createRootRoute({
   head: () => ({
     meta: [
       { charSet: "utf-8" },
@@ -255,13 +254,12 @@ function Analytics() {
 // app, so this one pathname check is it - see routes/admin/_layout.tsx for
 // the admin section's own (much simpler) chrome.
 function RootComponent() {
-  const { queryClient } = Route.useRouteContext();
   const { pathname } = useLocation();
   const { t } = useTranslation();
   const isAdminRoute = pathname.startsWith("/admin");
 
   return (
-    <QueryClientProvider client={queryClient}>
+    <>
       <SessionProvider>
         <Analytics />
         {!isAdminRoute && (
@@ -285,6 +283,6 @@ function RootComponent() {
         </main>
         {!isAdminRoute && <SiteFooter />}
       </SessionProvider>
-    </QueryClientProvider>
+    </>
   );
 }
