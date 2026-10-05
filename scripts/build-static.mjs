@@ -32,6 +32,7 @@ const ROUTES = [
   "/subscribe",
   "/reset-password",
   "/privacy",
+  "/terms",
   // Signed-in-only, but still a real static path that must exist on the host -
   // the gate is client-side (see the route's own comment), so the HTML has to
   // be there for the redirect to be able to run at all. Translated too (see the
@@ -64,6 +65,7 @@ const ROUTES = [
       "/order",
       "/subscribe",
       "/privacy",
+      "/terms",
       "/orders",
       "/reset-password",
     ].map((route) => (route === "/" ? `/${locale}` : `/${locale}${route}`)),

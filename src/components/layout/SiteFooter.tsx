@@ -62,6 +62,10 @@ export function SiteFooter() {
         <LocaleLink to="/privacy" className="text-muted-warm no-underline hover:underline">
           {t("footer.privacy")}
         </LocaleLink>
+        <span aria-hidden="true"> · </span>
+        <LocaleLink to="/terms" className="text-muted-warm no-underline hover:underline">
+          {t("footer.terms")}
+        </LocaleLink>
       </div>
     </footer>
   );

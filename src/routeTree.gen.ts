@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TermsRouteImport } from './routes/terms'
 import { Route as SubscribeRouteImport } from './routes/subscribe'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as PrivacyRouteImport } from './routes/privacy'
@@ -25,6 +26,7 @@ import { Route as AdminLayoutReportingRouteImport } from './routes/admin/_layout
 import { Route as AdminLayoutPostPredictRouteImport } from './routes/admin/_layout.post-predict'
 import { Route as AdminLayoutLoginRouteImport } from './routes/admin/_layout.login'
 import { Route as AdminLayoutCockpitRouteImport } from './routes/admin/_layout.cockpit'
+import { Route as LocaleLayoutTermsRouteImport } from './routes/$locale/_layout.terms'
 import { Route as LocaleLayoutSubscribeRouteImport } from './routes/$locale/_layout.subscribe'
 import { Route as LocaleLayoutResetPasswordRouteImport } from './routes/$locale/_layout.reset-password'
 import { Route as LocaleLayoutPrivacyRouteImport } from './routes/$locale/_layout.privacy'
@@ -34,6 +36,11 @@ import { Route as LocaleLayoutHistoryRouteImport } from './routes/$locale/_layou
 import { Route as LocaleLayoutAboutRouteImport } from './routes/$locale/_layout.about'
 import { Route as AdminLayoutOrdersNewRouteImport } from './routes/admin/_layout.orders.new'
 
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SubscribeRoute = SubscribeRouteImport.update({
   id: '/subscribe',
   path: '/subscribe',
@@ -114,6 +121,11 @@ const AdminLayoutCockpitRoute = AdminLayoutCockpitRouteImport.update({
   path: '/cockpit',
   getParentRoute: () => AdminLayoutRoute,
 } as any)
+const LocaleLayoutTermsRoute = LocaleLayoutTermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
+  getParentRoute: () => LocaleLayoutRoute,
+} as any)
 const LocaleLayoutSubscribeRoute = LocaleLayoutSubscribeRouteImport.update({
   id: '/subscribe',
   path: '/subscribe',
@@ -165,6 +177,7 @@ export interface FileRoutesByFullPath {
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/subscribe': typeof SubscribeRoute
+  '/terms': typeof TermsRoute
   '/$locale': typeof LocaleLayoutRouteWithChildren
   '/admin': typeof AdminLayoutRouteWithChildren
   '/$locale/about': typeof LocaleLayoutAboutRoute
@@ -174,6 +187,7 @@ export interface FileRoutesByFullPath {
   '/$locale/privacy': typeof LocaleLayoutPrivacyRoute
   '/$locale/reset-password': typeof LocaleLayoutResetPasswordRoute
   '/$locale/subscribe': typeof LocaleLayoutSubscribeRoute
+  '/$locale/terms': typeof LocaleLayoutTermsRoute
   '/admin/cockpit': typeof AdminLayoutCockpitRoute
   '/admin/login': typeof AdminLayoutLoginRoute
   '/admin/post-predict': typeof AdminLayoutPostPredictRoute
@@ -191,6 +205,7 @@ export interface FileRoutesByTo {
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/subscribe': typeof SubscribeRoute
+  '/terms': typeof TermsRoute
   '/$locale/about': typeof LocaleLayoutAboutRoute
   '/$locale/history': typeof LocaleLayoutHistoryRoute
   '/$locale/order': typeof LocaleLayoutOrderRoute
@@ -198,6 +213,7 @@ export interface FileRoutesByTo {
   '/$locale/privacy': typeof LocaleLayoutPrivacyRoute
   '/$locale/reset-password': typeof LocaleLayoutResetPasswordRoute
   '/$locale/subscribe': typeof LocaleLayoutSubscribeRoute
+  '/$locale/terms': typeof LocaleLayoutTermsRoute
   '/admin/cockpit': typeof AdminLayoutCockpitRoute
   '/admin/login': typeof AdminLayoutLoginRoute
   '/admin/post-predict': typeof AdminLayoutPostPredictRoute
@@ -216,6 +232,7 @@ export interface FileRoutesById {
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/subscribe': typeof SubscribeRoute
+  '/terms': typeof TermsRoute
   '/$locale/_layout': typeof LocaleLayoutRouteWithChildren
   '/admin/_layout': typeof AdminLayoutRouteWithChildren
   '/$locale/_layout/about': typeof LocaleLayoutAboutRoute
@@ -225,6 +242,7 @@ export interface FileRoutesById {
   '/$locale/_layout/privacy': typeof LocaleLayoutPrivacyRoute
   '/$locale/_layout/reset-password': typeof LocaleLayoutResetPasswordRoute
   '/$locale/_layout/subscribe': typeof LocaleLayoutSubscribeRoute
+  '/$locale/_layout/terms': typeof LocaleLayoutTermsRoute
   '/admin/_layout/cockpit': typeof AdminLayoutCockpitRoute
   '/admin/_layout/login': typeof AdminLayoutLoginRoute
   '/admin/_layout/post-predict': typeof AdminLayoutPostPredictRoute
@@ -244,6 +262,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/reset-password'
     | '/subscribe'
+    | '/terms'
     | '/$locale'
     | '/admin'
     | '/$locale/about'
@@ -253,6 +272,7 @@ export interface FileRouteTypes {
     | '/$locale/privacy'
     | '/$locale/reset-password'
     | '/$locale/subscribe'
+    | '/$locale/terms'
     | '/admin/cockpit'
     | '/admin/login'
     | '/admin/post-predict'
@@ -270,6 +290,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/reset-password'
     | '/subscribe'
+    | '/terms'
     | '/$locale/about'
     | '/$locale/history'
     | '/$locale/order'
@@ -277,6 +298,7 @@ export interface FileRouteTypes {
     | '/$locale/privacy'
     | '/$locale/reset-password'
     | '/$locale/subscribe'
+    | '/$locale/terms'
     | '/admin/cockpit'
     | '/admin/login'
     | '/admin/post-predict'
@@ -294,6 +316,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/reset-password'
     | '/subscribe'
+    | '/terms'
     | '/$locale/_layout'
     | '/admin/_layout'
     | '/$locale/_layout/about'
@@ -303,6 +326,7 @@ export interface FileRouteTypes {
     | '/$locale/_layout/privacy'
     | '/$locale/_layout/reset-password'
     | '/$locale/_layout/subscribe'
+    | '/$locale/_layout/terms'
     | '/admin/_layout/cockpit'
     | '/admin/_layout/login'
     | '/admin/_layout/post-predict'
@@ -321,12 +345,20 @@ export interface RootRouteChildren {
   PrivacyRoute: typeof PrivacyRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SubscribeRoute: typeof SubscribeRoute
+  TermsRoute: typeof TermsRoute
   LocaleLayoutRoute: typeof LocaleLayoutRouteWithChildren
   AdminLayoutRoute: typeof AdminLayoutRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/subscribe': {
       id: '/subscribe'
       path: '/subscribe'
@@ -439,6 +471,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminLayoutCockpitRouteImport
       parentRoute: typeof AdminLayoutRoute
     }
+    '/$locale/_layout/terms': {
+      id: '/$locale/_layout/terms'
+      path: '/terms'
+      fullPath: '/$locale/terms'
+      preLoaderRoute: typeof LocaleLayoutTermsRouteImport
+      parentRoute: typeof LocaleLayoutRoute
+    }
     '/$locale/_layout/subscribe': {
       id: '/$locale/_layout/subscribe'
       path: '/subscribe'
@@ -506,6 +545,7 @@ interface LocaleLayoutRouteChildren {
   LocaleLayoutPrivacyRoute: typeof LocaleLayoutPrivacyRoute
   LocaleLayoutResetPasswordRoute: typeof LocaleLayoutResetPasswordRoute
   LocaleLayoutSubscribeRoute: typeof LocaleLayoutSubscribeRoute
+  LocaleLayoutTermsRoute: typeof LocaleLayoutTermsRoute
   LocaleLayoutIndexRoute: typeof LocaleLayoutIndexRoute
 }
 
@@ -517,6 +557,7 @@ const LocaleLayoutRouteChildren: LocaleLayoutRouteChildren = {
   LocaleLayoutPrivacyRoute: LocaleLayoutPrivacyRoute,
   LocaleLayoutResetPasswordRoute: LocaleLayoutResetPasswordRoute,
   LocaleLayoutSubscribeRoute: LocaleLayoutSubscribeRoute,
+  LocaleLayoutTermsRoute: LocaleLayoutTermsRoute,
   LocaleLayoutIndexRoute: LocaleLayoutIndexRoute,
 }
 
@@ -555,6 +596,7 @@ const rootRouteChildren: RootRouteChildren = {
   PrivacyRoute: PrivacyRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SubscribeRoute: SubscribeRoute,
+  TermsRoute: TermsRoute,
   LocaleLayoutRoute: LocaleLayoutRouteWithChildren,
   AdminLayoutRoute: AdminLayoutRouteWithChildren,
 }
