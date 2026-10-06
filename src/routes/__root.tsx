@@ -174,12 +174,15 @@ export const Route = createRootRoute({
       { property: "og:image:type", content: "image/jpeg" },
       { property: "og:image:width", content: "1200" },
       { property: "og:image:height", content: "630" },
-      { property: "og:image:alt", content: "Kacchi biriyani from Dhaka Kacchi Berlin" },
+      { property: "og:image:alt", content: "Dhaka Kacchi Berlin logo" },
       { name: "twitter:image", content: `${SITE_URL}/og-image.jpg` },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "icon", href: "/favicon.ico", sizes: "48x48" },
+      { rel: "icon", href: "/favicons/favicon-32.png", type: "image/png", sizes: "32x32" },
+      { rel: "icon", href: "/favicons/icon-192.png", type: "image/png", sizes: "192x192" },
+      { rel: "apple-touch-icon", href: "/favicons/apple-touch-icon.png", sizes: "180x180" },
       // Fonts are self-hosted (@font-face in styles.css). Preload the two
       // faces every page paints above the fold - body copy and the serif
       // headline. Fonts are only discovered once the CSS has been fetched AND

@@ -8,7 +8,7 @@ import { LanguageSwitcher } from "@/components/layout/LanguageSwitcher";
 import { useScrolled } from "@/hooks/useScrolled";
 import { useSession } from "@/hooks/useSession";
 import { cn } from "@/lib/utils";
-import logo from "@/assets/photos/logo-nav.webp";
+import logo from "@/assets/photos/logo.webp";
 
 export function SiteHeader() {
   const { t } = useTranslation();
@@ -89,10 +89,12 @@ export function SiteHeader() {
           <img
             src={logo}
             alt={site.name}
-            width={216}
-            height={144}
-            className="h-12 w-auto object-contain"
-            style={{ filter: "invert(1) sepia(1) saturate(2) hue-rotate(5deg) brightness(1.1)" }}
+            width={640}
+            height={396}
+            className={cn(
+              "w-auto object-contain transition-[height] duration-300",
+              scrolled ? "h-12" : "h-16",
+            )}
           />
         </LocaleLink>
 

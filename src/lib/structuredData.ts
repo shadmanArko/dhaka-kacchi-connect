@@ -1,7 +1,7 @@
 import i18n, { type Locale } from "@/lib/i18n";
 import { canonical, SITE_URL } from "@/lib/seo";
 import { site } from "@/content/site";
-import logo from "@/assets/photos/logo-nav.webp";
+import logo from "@/assets/photos/logo.webp";
 
 /**
  * schema.org JSON-LD for the home page (Google's recommended structured-data

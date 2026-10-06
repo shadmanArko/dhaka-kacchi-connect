@@ -12,6 +12,7 @@
 import { mkdir, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
+import { buildLogo } from "./build-logo.mjs";
 
 const SRC_DIR = path.resolve("assets-src");
 const OUT_DIR = path.resolve("src/assets/photos");
@@ -51,13 +52,8 @@ for (const [name, widths] of Object.entries(PHOTOS)) {
   }
 }
 
-// The nav/footer logo. The master is an RGB image on a near-white, slightly
-// noisy background (no alpha); the page inverts it with a CSS filter so that
-// background becomes near-black. Lossless would faithfully preserve the noise
-// (31 KB); q90 lossy is 7 KB and visually identical once inverted.
-await sharp(path.join(SRC_DIR, "logo-nav.png"))
-  .webp({ quality: 90, effort: 6 })
-  .toFile(path.join(OUT_DIR, "logo-nav.webp"));
+// Logo, favicons and the social-share card, all derived from assets-src/logo.png.
+await buildLogo();
 
 console.log(
   `wrote ${(await readdir(OUT_DIR)).length} files to ${path.relative(process.cwd(), OUT_DIR)}`,
