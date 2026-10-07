@@ -19,12 +19,19 @@
  * identifyCustomer() sends only the customer id - never name, email, phone,
  * date of birth or address - to keep personal data out of the third-party tool.
  *
+ * Every event is passed through scrubEvent (analyticsScrub.ts) before it
+ * leaves the browser: PostHog records the full page URL, and ours carry a
+ * password-reset token (/reset-password?token=), order ids (/orders?order=) and
+ * ad-click ids. Only UTM parameters survive. Without this, anyone with PostHog
+ * access could read a live reset token.
+ *
  * PostHog is loaded lazily (dynamic import) so its ~90 KB chunk is fetched
  * after the app is interactive instead of delaying first paint. Calls made
  * before it arrives are queued (bounded) and replayed once it has loaded.
  */
 
 import { api, type WarehouseEventName } from "./api";
+import { scrubEvent } from "./analyticsScrub";
 import { getAnonymousId, getBeaconSessionId } from "./beaconIdentity";
 import { getSessionUtm } from "./utmCapture";
 
@@ -144,6 +151,17 @@ export function initAnalytics(): void {
         // pause can stop and restart it.
         disable_session_recording: true,
         opt_out_capturing_by_default: false,
+        // Runs on EVERY event (pageviews, clicks, custom events, replay
+        // metadata) before it is sent. See analyticsScrub.ts for why; a test
+        // fails if this line is ever removed.
+        before_send: scrubEvent,
+        // The site uses no feature flags, surveys or experiments, and this is
+        // the one PostHog request before_send cannot reach: the flag lookup
+        // posts the visitor's FULL current URL (reset token and all) as
+        // "person properties". Found by capturing the SDK's real traffic.
+        // Switching it off removes that leak and saves a request per page load.
+        // If flags are ever adopted, scrub that payload first.
+        advanced_disable_feature_flags: true,
       });
 
       // Before the queue drains, so a queued $pageview lands inside the
