@@ -10,6 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { AreaChart, BarList } from "./charts";
+import { LinksTable } from "./LinksTable";
 import { ago, decimal, formatDay, humanizeEvent, num } from "./format";
 import { SortableHead } from "./sortable";
 import { useSort } from "./useSort";
@@ -151,7 +152,7 @@ export function WebsiteTab({
                   rows={web.data.actions.map((a) => ({
                     label: humanizeEvent(a.eventName),
                     value: a.sessions,
-                    detail: `${num(a.events)} times`,
+                    detail: `${num(a.events)} ${a.events === 1 ? "time" : "times"}`,
                   }))}
                 />
               ) : (
@@ -163,14 +164,25 @@ export function WebsiteTab({
       )}
 
       <Panel
-        title="Visits from tagged links"
+        title="Posts and links"
+        note="Every link made in the Link builder, with the visits and orders it brought."
+      >
+        {analytics.links.status === "ok" ? (
+          <LinksTable data={analytics.links.data} />
+        ) : (
+          <Unavailable what="Link tracking" />
+        )}
+      </Panel>
+
+      <Panel
+        title="Order-funnel activity by channel"
         action={
           <Badge variant="outline" className="font-sans text-xs">
             {attributionCoverage.attributed} attributed · {attributionCoverage.unattributed}{" "}
             direct/unattributed
           </Badge>
         }
-        note="Events carrying a channel and campaign (all time), from the order-funnel tracking."
+        note="Steps taken on the order page that carry a channel and campaign (all time)."
       >
         <Table>
           <TableHeader>

@@ -687,6 +687,83 @@ const YoutubeAnalyticsSchema = z.object({
   fetchedAt: z.string().nullable(),
 });
 
+// --- Tagged links (the admin Link builder - worker/src/lib/trackedLinks.ts has
+// the rules, trackedLinksRepository.ts the table) ---
+
+export const TrackedLinkSchema = z
+  .object({
+    id: z.string(),
+    createdAt: z.string(),
+    label: z.string(),
+    source: z.string(),
+    medium: z.string(),
+    campaign: z.string(),
+    content: z.string(),
+    destinationPath: z.string(),
+    url: z.string(),
+    postUrl: z.string().nullable(),
+  })
+  .openapi("TrackedLink");
+
+export const TrackedLinkInputSchema = z
+  .object({
+    label: z.string().trim().min(2).max(100).openapi({ example: "Reel - kacchi pot" }),
+    source: z.string().max(80).openapi({ example: "instagram" }),
+    medium: z.string().max(40).openapi({ example: "organic_social" }),
+    campaign: z.string().max(80).openapi({ example: "batch-2026-10-10" }),
+    content: z.string().max(80).openapi({ example: "reel-kacchi-pot" }),
+    destinationPath: z.string().max(100).optional().openapi({ example: "/" }),
+  })
+  .openapi("TrackedLinkInput");
+
+export const TrackedLinkListSchema = z
+  .object({ links: z.array(TrackedLinkSchema) })
+  .openapi("TrackedLinkList");
+
+export const TrackedLinkResultSchema = z
+  .object({
+    link: TrackedLinkSchema,
+    created: z.boolean().openapi({
+      description: "False when this exact link already existed and was returned unchanged.",
+    }),
+  })
+  .openapi("TrackedLinkResult");
+
+export const TrackedLinkPostInputSchema = z
+  .object({
+    postUrl: z.string().max(500).nullable().openapi({
+      description: "The published post's URL, or null to clear it.",
+    }),
+  })
+  .openapi("TrackedLinkPostInput");
+
+const LinksAnalyticsSchema = z.object({
+  coverage: z.object({
+    total: z.number().int(),
+    linked: z.number().int(),
+    otherTagged: z.number().int(),
+    referral: z.number().int(),
+    direct: z.number().int(),
+  }),
+  links: z.array(
+    z.object({
+      id: z.string(),
+      label: z.string(),
+      source: z.string(),
+      medium: z.string(),
+      campaign: z.string(),
+      content: z.string(),
+      postUrl: z.string().nullable(),
+      createdAt: z.string(),
+      sessions: z.number().int(),
+      purchases: z.number().int(),
+      orders: z.number().int(),
+      revenue: z.number(),
+    }),
+  ),
+  totalLinks: z.number().int(),
+});
+
 export const AdminAnalyticsQuerySchema = z
   .object({
     days: z.enum(["7", "28", "90"]).optional().openapi({
@@ -704,6 +781,7 @@ export const AdminAnalyticsResultSchema = z
     web: analyticsSection(WebAnalyticsSchema),
     search: analyticsSection(SearchAnalyticsSchema),
     youtube: analyticsSection(YoutubeAnalyticsSchema),
+    links: analyticsSection(LinksAnalyticsSchema),
   })
   .openapi("AdminAnalyticsResult");
 

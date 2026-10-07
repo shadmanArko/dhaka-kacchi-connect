@@ -3,10 +3,11 @@
 ## What this is
 
 The API behind the Dhaka Kacchi ordering site: customer accounts (phone/email
-+ password, OTP-verified at signup), menu, delivery-fee quotes, and order
-creation (with email confirmation + a Telegram alert to the owner). Node.js +
-Postgres, plain `pg` (no ORM), Hono for HTTP routing. Runs as one long-lived
-process — in Docker on the VPS in production, via `npm run dev` locally.
+
+- password, OTP-verified at signup), menu, delivery-fee quotes, and order
+  creation (with email confirmation + a Telegram alert to the owner). Node.js +
+  Postgres, plain `pg` (no ORM), Hono for HTTP routing. Runs as one long-lived
+  process — in Docker on the VPS in production, via `npm run dev` locally.
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for how the pieces fit together and
 why they're structured this way. This file is just "how do I change X."
@@ -109,9 +110,11 @@ vars are set.
 
 **One-time setup after setting the env vars** (re-run any time the secret
 rotates — it's idempotent):
+
 ```bash
 npm run telegram:set-webhook
 ```
+
 Verify it took with `GET https://api.telegram.org/bot<token>/getWebhookInfo`
 — this is also the main debugging tool if a message to the bot doesn't get
 a reply, since the webhook route always responds `200` to Telegram (so
@@ -153,34 +156,34 @@ scoped to error tracking, not full APM/tracing.
 
 ## Key files, if you need to go deeper
 
-| File | Owns |
-|---|---|
-| `src/config.ts` | Reading and validating environment variables |
-| `src/db.ts` | The Postgres connection pool, plus a `withTransaction`/`isUniqueViolation` helper |
-| `src/lib/orders.ts` | Order pricing rules — no database, no HTTP |
-| `src/lib/ordersRepository.ts` | Reading/writing orders in Postgres |
-| `src/lib/customers.ts` | Customer domain types — no database, no HTTP |
-| `src/lib/customersRepository.ts` | Reading/writing customer accounts in Postgres |
-| `src/lib/otpRepository.ts` | The 6-digit codes texted at registration |
-| `src/lib/sessionsRepository.ts` | Logged-in sessions (a bearer token's hash → customer) |
-| `src/lib/passwordResetTokensRepository.ts` | "Forgot password" email links |
-| `src/lib/auth.ts` | Password hashing, OTP/token generation, and every OTP/session/lockout/rate-limit constant |
-| `src/lib/authMiddleware.ts` | The `requireAuth()` "you must be signed in" check |
-| `src/lib/delivery.ts` | Delivery-fee calculation |
-| `src/lib/plzLookup.ts` | Postal-code → coordinates lookup |
-| `src/lib/orderEvents.ts` | The "an order was created" event, and who listens |
-| `src/lib/email.ts` | Order-confirmation and password-reset emails |
-| `src/lib/berlinSms.ts` | The one-time OTP text at registration (BerlinSMS's plain SMS API, custom message) |
-| `src/lib/telegram.ts` | The owner's per-order alert, plus the inbound `/telegram/webhook` handling (see also `scripts/weeklyDigest.ts`) |
-| `scripts/setTelegramWebhook.ts` | One-time registration of the inbound webhook URL with Telegram |
-| `src/schemas.ts` | Request/response shapes (also generates the OpenAPI doc) |
-| `src/index.ts` | Routes — wires schemas, handlers, and the repositories together |
-| `src/server.ts` | Process entrypoint (starts the HTTP server, handles shutdown) |
-| `src/instrument.ts` | Sentry.init() — must stay the first import in `src/server.ts` |
-| `scripts/weeklyDigest.ts` | Friday-evening Telegram summary of the week's orders (cron-triggered, see below) |
-| `src/lib/adminUsersRepository.ts` / `adminSessionsRepository.ts` / `adminAuthMiddleware.ts` | Admin panel auth — see below |
-| `scripts/createAdminUser.ts` | One-time (re-runnable) admin account creation/password reset |
-| `migrations-manual/` | Additive, hand-run schema changes for a production database that already has real orders — see that directory's README |
+| File                                                                                        | Owns                                                                                                                   |
+| ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `src/config.ts`                                                                             | Reading and validating environment variables                                                                           |
+| `src/db.ts`                                                                                 | The Postgres connection pool, plus a `withTransaction`/`isUniqueViolation` helper                                      |
+| `src/lib/orders.ts`                                                                         | Order pricing rules — no database, no HTTP                                                                             |
+| `src/lib/ordersRepository.ts`                                                               | Reading/writing orders in Postgres                                                                                     |
+| `src/lib/customers.ts`                                                                      | Customer domain types — no database, no HTTP                                                                           |
+| `src/lib/customersRepository.ts`                                                            | Reading/writing customer accounts in Postgres                                                                          |
+| `src/lib/otpRepository.ts`                                                                  | The 6-digit codes texted at registration                                                                               |
+| `src/lib/sessionsRepository.ts`                                                             | Logged-in sessions (a bearer token's hash → customer)                                                                  |
+| `src/lib/passwordResetTokensRepository.ts`                                                  | "Forgot password" email links                                                                                          |
+| `src/lib/auth.ts`                                                                           | Password hashing, OTP/token generation, and every OTP/session/lockout/rate-limit constant                              |
+| `src/lib/authMiddleware.ts`                                                                 | The `requireAuth()` "you must be signed in" check                                                                      |
+| `src/lib/delivery.ts`                                                                       | Delivery-fee calculation                                                                                               |
+| `src/lib/plzLookup.ts`                                                                      | Postal-code → coordinates lookup                                                                                       |
+| `src/lib/orderEvents.ts`                                                                    | The "an order was created" event, and who listens                                                                      |
+| `src/lib/email.ts`                                                                          | Order-confirmation and password-reset emails                                                                           |
+| `src/lib/berlinSms.ts`                                                                      | The one-time OTP text at registration (BerlinSMS's plain SMS API, custom message)                                      |
+| `src/lib/telegram.ts`                                                                       | The owner's per-order alert, plus the inbound `/telegram/webhook` handling (see also `scripts/weeklyDigest.ts`)        |
+| `scripts/setTelegramWebhook.ts`                                                             | One-time registration of the inbound webhook URL with Telegram                                                         |
+| `src/schemas.ts`                                                                            | Request/response shapes (also generates the OpenAPI doc)                                                               |
+| `src/index.ts`                                                                              | Routes — wires schemas, handlers, and the repositories together                                                        |
+| `src/server.ts`                                                                             | Process entrypoint (starts the HTTP server, handles shutdown)                                                          |
+| `src/instrument.ts`                                                                         | Sentry.init() — must stay the first import in `src/server.ts`                                                          |
+| `scripts/weeklyDigest.ts`                                                                   | Friday-evening Telegram summary of the week's orders (cron-triggered, see below)                                       |
+| `src/lib/adminUsersRepository.ts` / `adminSessionsRepository.ts` / `adminAuthMiddleware.ts` | Admin panel auth — see below                                                                                           |
+| `scripts/createAdminUser.ts`                                                                | One-time (re-runnable) admin account creation/password reset                                                           |
+| `migrations-manual/`                                                                        | Additive, hand-run schema changes for a production database that already has real orders — see that directory's README |
 
 ## Admin panel
 
@@ -196,11 +199,12 @@ to an already-placed order (`PATCH /v1/admin/orders/{id}/discount` /
 
 **Bootstrap the first admin account** (also how you reset a forgotten
 password):
+
 ```bash
 ADMIN_EMAIL=you@example.com ADMIN_NAME="Your Name" ADMIN_PASSWORD=... npm run admin:create-user
 ```
 
-A discount is *current state on the order*, not a log — `applyDiscount`
+A discount is _current state on the order_, not a log — `applyDiscount`
 always replaces `discount_cents`/`discount_reason`, never accumulates.
 `orders.ts`'s `totalCents(order)` (`subtotal + deliveryFee - discount`) is
 the one place a total is computed — every caller (the public API response,
@@ -246,6 +250,23 @@ charts stop at the source's last day instead of drawing a false drop; a follower
 count has no history before the nightly job started. `/reporting/*` needs its own
 `requireAdminAuth` line (`/reporting` alone matches only the exact path).
 
+**Link builder (`/admin/links`)** makes the tagged links that tie a website visit to the
+post, story, message or creator that caused it. The rules live in one place,
+`src/lib/trackedLinks.ts` (closed lists of sources and mediums, a strict slug format,
+and the URL builder): the page offers choices, but a typo like `insta` is rejected with
+a plain message rather than silently splitting one post's numbers in two.
+`(source, content)` is unique, because that exact pair is how the warehouse resolves a
+visit (`channel.platform = utm_source` + `campaign_variant.utm_content`); the same link
+again returns the existing one, a clash with different details answers 409. Rows are
+append-only except `post_url`, which is filled in after the post is published (the link
+has to exist before the post that carries it). `normalizePostUrl` here and
+`normalize_post_url` in the warehouse's `ingest/links.py` must stay in step; both are
+tested against the same cases. The table is created by hand on production with
+`migrations-manual/0004_tracked_links.sql` (it includes the `ordering_app` /
+`ordering_reader` grants - without them every request fails with "permission denied").
+Links are built from `PUBLIC_SITE_URL`; the page warns loudly if a link would point
+anywhere but dhakakacchi.com.
+
 ## Deploying
 
 Build and run via Docker (see `Dockerfile`) on the VPS, behind Caddy. See
@@ -256,6 +277,7 @@ The weekly digest (`npm run digest:weekly`) is a plain script, not a route —
 it's meant to be triggered by an OS-level cron job on the VPS at Friday
 18:00 Europe/Berlin (the same moment that Saturday's order cutoff closes),
 e.g.:
+
 ```
 0 18 * * 5 cd /opt/dhaka-kacchi/dhaka-kacchi-connect/worker && npm run digest:weekly >> /var/log/dhaka-kacchi-digest.log 2>&1
 ```
