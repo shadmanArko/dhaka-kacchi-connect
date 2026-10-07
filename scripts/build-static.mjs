@@ -50,6 +50,7 @@ const ROUTES = [
   "/admin/login",
   "/admin/orders/new",
   "/admin/reporting",
+  "/admin/links",
   "/admin/cockpit",
   "/admin/post-predict",
   // Every locale in src/lib/i18n.ts's SUPPORTED_LOCALES, prefixed onto the
