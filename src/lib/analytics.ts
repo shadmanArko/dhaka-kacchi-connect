@@ -1,63 +1,27 @@
 /**
- * Single seam for every PostHog call the app makes - analogous to
- * src/lib/api.ts's "single fetch seam." Every exported function no-ops
- * safely if VITE_POSTHOG_KEY isn't set, so local dev needs zero PostHog
- * account (same "optional integration degrades gracefully" rule
- * worker/src/config.ts already follows for Telegram/BerlinSMS).
+ * Single seam for every analytics call the app makes: PostHog, and the
+ * first-party event beacon that feeds the warehouse (POST /v1/events).
+ * Every PostHog function no-ops safely if VITE_POSTHOG_KEY isn't set, so local
+ * dev needs no PostHog account.
  *
- * GDPR/consent model (see ConsentBanner.tsx for the UI):
- *   - Before an explicit choice, capture is ANONYMOUS AND COOKIELESS, not
- *     silent. opt_out_capturing_by_default makes a still-pending visitor
- *     count as rejected, and cookieless_mode "on_reject" turns rejection
- *     into un-identifiable capture rather than no capture. So a visitor who
- *     never touches the banner is treated exactly like one who pressed
- *     Reject. (This file previously claimed the SDK "starts fully silent" -
- *     it does not, and the distinction matters for what /privacy says.)
- *   - Reject -> opt_out_capturing() only. Because cookieless_mode is
- *     "on_reject", PostHog itself downgrades this to anonymous,
- *     non-persistent, un-identifiable event capture instead of stopping
- *     entirely - still enough for aggregate funnel/heatmap reports, with
- *     no cookie and no way to link the visitor across days.
- *   - Accept -> opt_in_capturing() AND startSessionRecording(). Session
- *     recording never auto-starts (disable_session_recording: true at
- *     init) and PostHog's own docs describe no automatic link between
- *     cookieless_mode and session recording, so it's wired here
- *     explicitly, gated on full acceptance only.
- *   - identifyCustomer() intentionally sends only the customer id, never
- *     name/email/phone/DOB/address - data minimization: the only reason to
- *     identify at all is linking a returning customer's sessions for
- *     funnel continuity, not building a PII profile inside a third-party
- *     tool.
+ * OWNER DECISION (2026-10): collection does NOT depend on the cookie banner.
+ * PostHog (persistent identity, heatmaps, session recording) and the
+ * first-party beacon run for every visitor, whatever they click. The banner
+ * and the stored choice still exist, but they only decide whether the banner
+ * is shown - they never switch collection on or off. Legal responsibility for
+ * this sits with the business owner.
  *
- * WHY POSTHOG IS LOADED LAZILY, AND WHAT THAT COST
+ * Two deliberate exclusions remain:
+ *   - A device that opened any page with ?internal=1 sends nothing
+ *     (?internal=0 turns it back on). Per browser, stored in localStorage.
+ *   - Nothing is sent while the owner is inside /admin.
  *
- * `import posthog from "posthog-js"` at module scope put the whole SDK in
- * the entry chunk, because __root.tsx imports this file - so every visitor
- * downloaded and parsed it before the first paint of a page that may never
- * capture anything. It is now a dynamic import, which moves it into its own
- * chunk fetched after the app is interactive.
+ * identifyCustomer() sends only the customer id - never name, email, phone,
+ * date of birth or address - to keep personal data out of the third-party tool.
  *
- * That forced one real design change. `hasRespondedToConsent()` decides
- * whether the cookie banner renders, and it is called synchronously from an
- * effect on mount - it cannot await a chunk without the banner flashing in
- * and out on every load. So THIS MODULE now owns the consent decision in its
- * own localStorage key rather than asking the SDK for it.
- *
- * The behaviour a visitor experiences is unchanged - pending still means
- * anonymous cookieless capture, Accept still opts in and starts recording,
- * Reject still opts out - because the stored decision is re-applied to the
- * SDK as soon as it finishes loading. What changed is only WHERE the
- * decision is remembered, and ours is now the authority: it is written
- * before the SDK is even loaded and re-applied on every init, so the two can
- * no longer silently disagree the way they could when posthog.reset()
- * cleared consent behind our back (see resetAnalyticsIdentity below).
- *
- * The one accepted cost: a visitor who answered the banner BEFORE this
- * change has their choice recorded only inside PostHog, so they are asked
- * once more. Deliberately not worked around - reading PostHog's internal
- * storage format to back-fill would couple us to an undocumented key shape
- * to save a single extra click, one time, for a site that had no meaningful
- * traffic when this shipped.
+ * PostHog is loaded lazily (dynamic import) so its ~90 KB chunk is fetched
+ * after the app is interactive instead of delaying first paint. Calls made
+ * before it arrives are queued (bounded) and replayed once it has loaded.
  */
 
 import { api, type WarehouseEventName } from "./api";
@@ -67,17 +31,32 @@ import { getSessionUtm } from "./utmCapture";
 const POSTHOG_KEY = import.meta.env.VITE_POSTHOG_KEY;
 const POSTHOG_HOST = import.meta.env.VITE_POSTHOG_HOST ?? "https://eu.i.posthog.com";
 
-/** Distinct from the two session keys and the cart key, same reasoning
- * adminSession.ts documents: one key, one owner, no shared blob. */
+/** The banner choice. Own key, same reasoning as the session and cart keys:
+ * one key, one owner, no shared blob. */
 const CONSENT_KEY = "dhaka-kacchi-consent";
 
-/**
- * Per-browser opt-out for the owner/testers. Visit any page with
- * ?internal=1 once to switch analytics off on that browser for good
- * (?internal=0 switches it back on). Lives in localStorage, so it covers
- * this device's browser only - which is exactly what "exclude my device" means.
- */
+/** Set by visiting any page with ?internal=1; cleared by ?internal=0. */
 const INTERNAL_KEY = "dhaka-kacchi-internal";
+
+type ConsentChoice = "granted" | "denied";
+type PostHog = typeof import("posthog-js").default;
+
+let posthog: PostHog | null = null;
+let loading: Promise<void> | null = null;
+
+/** True while the owner is inside /admin. Nothing is captured until they leave. */
+let adminPaused = false;
+
+/**
+ * Calls made before the SDK finishes loading. Bounded because the load can
+ * fail permanently (offline, a blocked chunk) and an unbounded queue of every
+ * pageview and click for the rest of the visit would be a memory leak in the
+ * one case nobody is watching.
+ */
+const pending: ((ph: PostHog) => void)[] = [];
+const MAX_PENDING = 50;
+
+// --- Storage helpers (never throw: storage can be unavailable in private mode)
 
 function isInternalDevice(): boolean {
   try {
@@ -98,27 +77,6 @@ export function captureInternalFlag(): void {
   }
 }
 
-/** True while the owner is inside /admin. Capture stays off until they leave. */
-let adminPaused = false;
-
-type ConsentChoice = "granted" | "denied";
-type PostHog = typeof import("posthog-js").default;
-
-let posthog: PostHog | null = null;
-let loading: Promise<void> | null = null;
-
-/**
- * Calls made before the SDK finishes loading. Bounded because the load can
- * fail permanently (offline, a blocked chunk) and an unbounded queue of
- * every pageview and click for the rest of the visit is a memory leak in
- * the one case nobody is watching. Analytics is the thing that gets dropped
- * when analytics is broken.
- */
-const pending: ((ph: PostHog) => void)[] = [];
-const MAX_PENDING = 50;
-
-/** Never throws: storage can be unavailable in private mode, and a consent
- * read sits on the render path of every page. */
 function readConsent(): ConsentChoice | null {
   try {
     const raw = localStorage.getItem(CONSENT_KEY);
@@ -132,43 +90,28 @@ function writeConsent(choice: ConsentChoice): void {
   try {
     localStorage.setItem(CONSENT_KEY, choice);
   } catch {
-    // Quota or private mode. The in-memory decision below still applies for
-    // this page view; the visitor is simply asked again next time.
+    // Quota or private mode: the visitor is simply asked again next time.
   }
 }
 
+// --- PostHog plumbing
+
 /**
- * Applies the stored decision to a freshly loaded (or just-reset) SDK.
- *
- * Both calls are guarded on the SDK's CURRENT state, and that guard is
- * load-bearing rather than a micro-optimisation: opt_in_capturing() resets
- * the visitor to a fresh cookie-backed identity, so calling it
- * unconditionally on every page load would give a returning visitor a new
- * identity every time and shatter their funnel into single-pageview
- * sessions. It must fire only on a genuine transition.
- *
- * "pending" needs no call at all: opt_out_capturing_by_default already puts
- * the SDK in exactly the state a pending visitor should be in.
+ * Makes sure PostHog is capturing and recording. A visitor who pressed Reject
+ * before collection stopped depending on the banner still has an opt-out
+ * stored by PostHog itself, so clear it (captureEventName:false - this is not
+ * a consent event). Guarded: opt_in_capturing() resets the visitor to a fresh
+ * identity, so it must only run on a genuine transition, never on every call.
+ * startSessionRecording() is idempotent, and needed because
+ * disable_session_recording:true at init means nothing starts it implicitly.
  */
-function applyConsent(ph: PostHog, choice: ConsentChoice | null): void {
-  if (choice === "granted") {
-    if (!ph.has_opted_in_capturing()) {
-      // captureEventName:false - this is restoring a decision the visitor
-      // already made, not a new one. Firing $opt_in on every page load would
-      // corrupt the consent audit trail.
-      ph.opt_in_capturing({ captureEventName: false });
-    }
-    // Safe to call repeatedly - PostHog no-ops if recording is already
-    // running - and necessary because disable_session_recording:true at init
-    // means nothing ever starts it implicitly.
-    ph.startSessionRecording();
-  } else if (choice === "denied") {
-    if (!ph.has_opted_out_capturing()) ph.opt_out_capturing();
-  }
+function ensureCapturing(ph: PostHog): void {
+  if (ph.has_opted_out_capturing()) ph.opt_in_capturing({ captureEventName: false });
+  ph.startSessionRecording();
 }
 
 /** Queues until the SDK is ready, then runs. A no-op when analytics isn't
- * configured, which is the whole of local dev. */
+ * configured (all of local dev), on an excluded device, or inside /admin. */
 function withPostHog(fn: (ph: PostHog) => void): void {
   if (!POSTHOG_KEY || isInternalDevice() || adminPaused) return;
   if (posthog) {
@@ -181,66 +124,71 @@ function withPostHog(fn: (ph: PostHog) => void): void {
 export function initAnalytics(): void {
   if (loading || !POSTHOG_KEY || isInternalDevice()) return;
 
-  // Deliberately fire-and-forget rather than async: every caller is an
-  // effect that must not block paint, and the signature stays synchronous
-  // so nothing downstream has to become async to use it.
+  // Fire-and-forget: every caller is an effect that must not block paint.
   loading = import("posthog-js")
     .then(({ default: ph }) => {
       ph.init(POSTHOG_KEY, {
         api_host: POSTHOG_HOST,
         // Copy the current dated default from PostHog's own project-creation
-        // setup snippet when standing up a new project - this value is
-        // versioned by PostHog itself and will drift over time.
+        // snippet when standing up a new project; PostHog versions it.
         defaults: "2026-05-30",
-        // Autocapture is OFF because __root.tsx's Analytics() already fires a
-        // manual $pageview per navigation. With `defaults` at 2025-05-24 or
-        // later, capture_pageview resolves to "history_change", so leaving it
-        // unset double-counted every navigation AND bypassed the deliberate
-        // /admin exclusion in Analytics() (autocapture doesn't know about it).
+        // __root.tsx's Analytics() fires a manual $pageview per navigation, so
+        // the SDK's own pageview capture stays off (it would double-count).
         capture_pageview: false,
-        // Required, not optional. capture_pageleave defaults to
-        // "if_capture_pageview", whose runtime gate is literally
-        //   capture_pageleave === true || ("if_capture_pageview" && !!capture_pageview)
-        // so turning the line above off would silently take $pageleave with it -
-        // and with it bounce rate and time-on-page.
+        // Must be explicit: its default ("if_capture_pageview") would turn
+        // $pageleave off together with the line above, and with it bounce
+        // rate and time-on-page.
         capture_pageleave: true,
         capture_heatmaps: true,
+        // Recording is started explicitly (ensureCapturing) so the /admin
+        // pause can stop and restart it.
         disable_session_recording: true,
-        cookieless_mode: "on_reject",
-        opt_out_capturing_by_default: true,
+        opt_out_capturing_by_default: false,
       });
 
-      // Before the queue drains, so a queued $pageview lands under the right
-      // identity and inside the recording rather than just outside it.
-      applyConsent(ph, readConsent());
+      // Before the queue drains, so a queued $pageview lands inside the
+      // recording rather than just outside it.
+      ensureCapturing(ph);
 
       posthog = ph;
       syncAdminPause(ph);
       for (const fn of pending.splice(0)) fn(ph);
     })
     .catch(() => {
-      // The chunk didn't load. Drop the queue and stay silent for the rest
-      // of the visit - analytics must never take the page down with it.
+      // The chunk didn't load. Drop the queue and stay silent for the rest of
+      // the visit - analytics must never take the page down with it.
       pending.length = 0;
     });
 }
 
-/** Whether the visitor has made an explicit accept/reject choice yet -
- * drives whether ConsentBanner shows itself. Returns true (nothing to ask)
- * if analytics isn't configured at all.
- *
- * Synchronous on purpose: see the header. It reads our own key, never the
+// --- Banner
+
+/** Whether the visitor has pressed Accept or Reject yet - drives whether
+ * ConsentBanner shows itself. Returns true (nothing to ask) if analytics isn't
+ * configured at all. Synchronous on purpose: it reads our own key, never the
  * SDK, so it answers correctly before PostHog has loaded. */
 export function hasRespondedToConsent(): boolean {
   if (!POSTHOG_KEY) return true;
   return readConsent() !== null;
 }
 
+/** Remembers Accept (hides the banner). Does not affect collection. */
+export function giveConsent(): void {
+  writeConsent("granted");
+}
+
+/** Remembers Reject (hides the banner). Does not affect collection. */
+export function withdrawConsent(): void {
+  writeConsent("denied");
+}
+
+// --- /admin pause
+
 /**
  * Silences everything PostHog does on its own while the owner is in /admin:
  * pageleave, heatmaps, autocapture and - the important one - session
- * recording, which would otherwise film the admin panel for anyone who
- * accepted the banner. Restored when they navigate back to the public site.
+ * recording, which would otherwise film the admin panel. Restored when they
+ * navigate back to the public site.
  */
 export function setAdminMode(inAdmin: boolean): void {
   adminPaused = inAdmin;
@@ -251,7 +199,7 @@ let configBeforeAdmin: { autocapture: unknown } | null = null;
 
 /** Brings the SDK's own background capture in line with `adminPaused`. Also
  * called right after init, so a page load that lands directly on /admin is
- * silenced before applyConsent's startSessionRecording can matter. */
+ * silenced before ensureCapturing's recording can matter. */
 function syncAdminPause(ph: PostHog): void {
   if (adminPaused) {
     configBeforeAdmin ??= { autocapture: ph.config.autocapture };
@@ -264,78 +212,39 @@ function syncAdminPause(ph: PostHog): void {
       autocapture: configBeforeAdmin.autocapture as boolean,
     });
     configBeforeAdmin = null;
-    if (readConsent() === "granted") ph.startSessionRecording();
+    ph.startSessionRecording();
   }
 }
 
-export function giveConsent(): void {
-  if (!POSTHOG_KEY) return;
-  // Written first, and synchronously: if the SDK is still in flight, this is
-  // what applyConsent() will find when it lands, and what survives a reload
-  // the visitor triggers a moment later.
-  writeConsent("granted");
-  withPostHog((ph) => {
-    ph.opt_in_capturing();
-    ph.startSessionRecording();
-  });
-  // opt_in_capturing() internally resets to a fresh, cookie-backed identity,
-  // and it used to fire that new identity's first $pageview itself - but only
-  // when config.capture_pageview is truthy, which it no longer is. Without
-  // this the accepting visitor's identity starts with zero pageviews until
-  // their next navigation, losing funnel entry attribution. Ordered last so
-  // the pageview lands on the new identity and inside the recording.
-  trackPageview();
-  // The warehouse beacon was gated off until this exact moment (see
-  // trackWarehouseEvent's consent gate) - the page_view for this pageload
-  // was skipped, so fire it now instead of waiting for the next navigation.
-  trackWarehouseEvent("page_view");
-}
-
-export function withdrawConsent(): void {
-  if (!POSTHOG_KEY) return;
-  writeConsent("denied");
-  withPostHog((ph) => ph.opt_out_capturing());
-  // Same reason as giveConsent(): under cookieless_mode "on_reject" this call
-  // re-registers an anonymous distinct_id and tears down the pageViewManager,
-  // then used to fire a pageview for the new identity.
-  trackPageview();
-}
+// --- Events
 
 export function trackEvent(name: string, properties?: Record<string, unknown>): void {
   withPostHog((ph) => ph.capture(name, properties));
 }
 
 /**
- * Fires a first-party event to the warehouse's POST /v1/events (see
- * dhaka_kacchi_ai_harness's ARCHITECTURE.md section 4.7) - a completely
- * separate pipe from PostHog above, with its own identity (beaconIdentity.ts)
- * and its own fixed vocabulary (WarehouseEventName).
+ * Fires a first-party event to the warehouse's POST /v1/events - a separate
+ * pipe from PostHog, with its own identity (beaconIdentity.ts) and its own
+ * fixed vocabulary (WarehouseEventName). Sent for every visitor; only an
+ * excluded device or the /admin panel is skipped.
  *
- * Gated on the SAME consent decision as PostHog, even though this beacon has
- * no cookieless fallback of its own: it's simplest and most conservative to
- * ship this as "off until the visitor explicitly accepts" rather than invent
- * a second anonymous-capture mode. A pending or rejected visitor sends zero
- * warehouse events, including page_view - accepted under-counting, not a bug.
- *
- * Deliberately fire-and-forget: analytics must never surface an error to the
- * UI, block a caller, or throw. Every call site that ALSO calls trackEvent()
- * (PostHog) should call this too, but the two are independent - one failing
- * must never affect the other.
+ * Fire-and-forget: analytics must never surface an error to the UI, block a
+ * caller, or throw. Call sites that also call trackEvent() (PostHog) should
+ * call this too, but the two are independent - one failing must never affect
+ * the other.
  *
  * Every call carries this session's captured UTM values (see utmCapture.ts),
- * if any - not just page_view. A purchase minutes or days into the same
- * session still carries the touch that brought the visitor in, which is
- * what lets the warehouse's ingest job resolve event.channel_id/campaign_id/
- * campaign_variant_id at all. Caller-supplied properties win on key
- * collision (spread last), though none are expected to share the utm_*
- * namespace.
+ * not just page_view: a purchase minutes into the same session still carries
+ * the touch that brought the visitor in, which is what lets the warehouse
+ * attribute it to a channel and campaign. Caller-supplied properties win on a
+ * key collision (spread last).
  */
 export function trackWarehouseEvent(
   eventName: WarehouseEventName,
   properties?: Record<string, unknown>,
   orderId?: string,
 ): void {
-  if (readConsent() !== "granted" || isInternalDevice() || adminPaused) return;
+  if (isInternalDevice() || adminPaused) return;
   const utm = getSessionUtm();
   api
     .trackEvent({
@@ -346,22 +255,18 @@ export function trackWarehouseEvent(
       properties: utm ? { ...utm, ...properties } : properties,
     })
     .catch(() => {
-      // Nowhere for this to go - see the header comment.
+      // Nowhere for this to go; analytics failures are silent by design.
     });
 }
 
 export function trackPageview(): void {
-  // `title` is read HERE rather than inside the queued callback, so a
-  // pageview queued during load records the page it actually happened on
-  // instead of whatever the visitor navigated to while the chunk was in
-  // flight.
-  //
-  // `title` is the one useful property PostHog's own autocapture attached
-  // that a bare capture("$pageview") doesn't - its web-analytics views key
-  // off it. Caveat: on a client-side navigation this effect and the one
-  // TanStack Router uses to write <title> have no guaranteed order, so an
-  // in-app navigation can record the previous page's title. Full page loads
-  // are always correct. Don't "fix" that with a setTimeout.
+  // `title` is read HERE rather than inside the queued callback, so a pageview
+  // queued during load records the page it actually happened on instead of
+  // whatever the visitor navigated to while the chunk was in flight.
+  // Caveat: on a client-side navigation this effect and the one TanStack
+  // Router uses to write <title> have no guaranteed order, so an in-app
+  // navigation can record the previous page's title. Full page loads are
+  // always correct. Don't "fix" that with a setTimeout.
   const title = typeof document === "undefined" ? undefined : document.title;
   withPostHog((ph) => ph.capture("$pageview", { title }));
 }
@@ -371,47 +276,22 @@ export function identifyCustomer(customerId: string): void {
 }
 
 /**
- * Detaches the current browser from the customer who just logged out, without
- * destroying their consent decision.
+ * Detaches the current browser from the customer who just logged out.
  *
- * posthog.reset() calls consent.reset() internally, dropping the SDK back to
- * "pending" - which, with opt_out_capturing_by_default, silently downgrades
- * someone who had ACCEPTED to anonymous cookieless capture with session
- * recording stopped. The SDK's own "reset() cleared the stored consent"
- * warning does NOT fire in this config (under cookieless_mode "on_reject" a
- * pending visitor still counts as capturing), so this was completely silent.
+ * posthog.reset() clears the identified user and the stored opt-in state, so
+ * capture and recording are re-established right after. Two alternatives are
+ * both wrong:
+ *   - Not resetting leaves the ex-customer's distinct_id on the device, so the
+ *     next person to use it is attributed to them.
+ *   - identify(someRandomId) mints a bogus *identified* person on every logout.
  *
- * Since the decision now lives in our own key, reset() can no longer destroy
- * it - but it still resets the SDK's in-memory consent, so it must still be
- * re-applied here. Re-read and re-apply, exactly as before.
- *
- * Two alternatives were considered and are both wrong here:
- *   - Not resetting at all leaves the ex-customer's distinct_id and
- *     $user_state:"identified" on the device, so the next person to use it -
- *     or the same browser logged out - is attributed to them.
- *   - identify(someRandomId) mints a bogus *identified* person on every
- *     logout; after a real login $user_state is already "identified", so
- *     identify() takes neither of its merge branches.
+ * Deliberately no trackPageview(): a logout is not a page view, and firing one
+ * would inflate pageview counts on whatever page the customer logged out from.
  */
 export function resetAnalyticsIdentity(): void {
   if (!POSTHOG_KEY) return;
-
-  const choice = readConsent();
-
   withPostHog((ph) => {
     ph.reset();
-    // captureEventName:false suppresses the $opt_in event - this is a logout,
-    // not a new consent decision, and firing $opt_in per logout would corrupt
-    // the consent audit trail. disable_session_recording:true at init means
-    // opt_in_capturing() rebuilds the recorder but never starts it, which is
-    // why applyConsent starts it explicitly.
-    applyConsent(ph, choice);
+    ensureCapturing(ph);
   });
-
-  // "pending" needs nothing: reset() already left it pending, and the banner
-  // is still on screen asking.
-  //
-  // Deliberately no trackPageview() here, unlike giveConsent()/withdrawConsent():
-  // a logout is not a page view, and firing one would inflate pageview counts
-  // on whatever page the customer logged out from.
 }
