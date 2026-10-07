@@ -593,6 +593,120 @@ export const AdminReportingResultSchema = z
   })
   .openapi("AdminReportingResult");
 
+// --- Analytics for the same page: followers, website (PostHog), Search Console,
+// YouTube Analytics (worker/src/lib/analyticsRepository.ts). Every source is its
+// own section so one unavailable table cannot blank the others. ---
+
+const analyticsSection = <T extends z.ZodType>(data: T) =>
+  z.discriminatedUnion("status", [
+    z.object({ status: z.literal("ok"), data }),
+    z.object({ status: z.literal("unavailable") }),
+  ]);
+
+const FollowerPlatformSchema = z.object({
+  platform: z.string(),
+  current: z.number().int().nullable(),
+  currentAt: z.string(),
+  change: z.number().int().nullable(),
+  since: z.string(),
+  history: z.array(z.object({ day: z.string(), followers: z.number().int().nullable() })),
+});
+
+const WebAnalyticsSchema = z.object({
+  daily: z.array(
+    z.object({
+      day: z.string(),
+      pageviews: z.number().int(),
+      sessions: z.number().int(),
+      visitors: z.number().int(),
+    }),
+  ),
+  totals: z.object({
+    pageviews: z.number().int(),
+    sessions: z.number().int(),
+    avgVisitorsPerDay: z.number(),
+  }),
+  topPages: z.array(
+    z.object({ path: z.string(), pageviews: z.number().int(), sessions: z.number().int() }),
+  ),
+  sources: z.array(
+    z.object({
+      source: z.string(),
+      medium: z.string(),
+      campaign: z.string(),
+      sessions: z.number().int(),
+    }),
+  ),
+  actions: z.array(
+    z.object({ eventName: z.string(), events: z.number().int(), sessions: z.number().int() }),
+  ),
+  dataThrough: z.string().nullable(),
+  builtAt: z.string().nullable(),
+  isStale: z.boolean(),
+});
+
+const SearchTotalsSchema = z.object({
+  clicks: z.number().int(),
+  impressions: z.number().int(),
+  position: z.number().nullable(),
+});
+
+const SearchRowSchema = z.object({
+  label: z.string(),
+  clicks: z.number().int(),
+  impressions: z.number().int(),
+  position: z.number().nullable(),
+});
+
+const SearchAnalyticsSchema = z.object({
+  web: z.object({
+    daily: z.array(
+      z.object({ day: z.string(), clicks: z.number().int(), impressions: z.number().int() }),
+    ),
+    totals: SearchTotalsSchema,
+  }),
+  image: z.object({ totals: SearchTotalsSchema }),
+  topQueries: z.array(SearchRowSchema),
+  topPages: z.array(SearchRowSchema),
+  pageCoverage: z.number().nullable(),
+  dataThrough: z.string().nullable(),
+  fetchedAt: z.string().nullable(),
+});
+
+const YoutubeAnalyticsSchema = z.object({
+  daily: z.array(
+    z.object({ day: z.string(), views: z.number().int(), watchMinutes: z.number().int() }),
+  ),
+  totals: z.object({
+    views: z.number().int(),
+    watchMinutes: z.number().int(),
+    subscribersGained: z.number().int(),
+    subscribersLost: z.number().int(),
+  }),
+  dataThrough: z.string().nullable(),
+  fetchedAt: z.string().nullable(),
+});
+
+export const AdminAnalyticsQuerySchema = z
+  .object({
+    days: z.enum(["7", "28", "90"]).optional().openapi({
+      description: "Window length in Berlin days, ending today. Defaults to 28.",
+    }),
+  })
+  .openapi("AdminAnalyticsQuery");
+
+export const AdminAnalyticsResultSchema = z
+  .object({
+    days: z.union([z.literal(7), z.literal(28), z.literal(90)]),
+    from: z.string(),
+    to: z.string(),
+    followers: analyticsSection(z.array(FollowerPlatformSchema)),
+    web: analyticsSection(WebAnalyticsSchema),
+    search: analyticsSection(SearchAnalyticsSchema),
+    youtube: analyticsSection(YoutubeAnalyticsSchema),
+  })
+  .openapi("AdminAnalyticsResult");
+
 // --- CEO cockpit (ARCHITECTURE.md section 4 - reads the sibling warehouse's
 // cockpit_alert table, see worker/src/lib/cockpitRepository.ts) ---
 

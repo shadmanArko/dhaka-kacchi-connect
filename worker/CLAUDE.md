@@ -229,6 +229,23 @@ rewrite, so a dynamic route segment can't be reliably deep-linked. See
 that repo's own `CLAUDE.md`/`scripts/build-static.mjs` if you're touching
 the frontend side.
 
+**Reporting page (`/admin/reporting`)** has five tabs (Overview, Social, Website,
+Search, Revenue) and a 7/28/90-day range, both kept in the URL (`?tab=&days=`).
+Two routes feed it, both read-only over `WAREHOUSE_DATABASE_URL`:
+`GET /v1/admin/reporting` (posts, channel funnel, revenue - `reportingRepository.ts`)
+and `GET /v1/admin/reporting/analytics?days=` (followers, website, Search Console,
+YouTube - `analyticsRepository.ts`). The analytics route reports each source as its
+own section and answers `unavailable` for one that can't be read, so a warehouse
+table that isn't there yet (the harness migrations ship separately from this
+worker) blanks one block, not the page. Things the numbers will not tell you
+unless you know: only `search_site_daily` holds true search totals (the page/query
+tables are partial - the page says so with the live percentage); website
+`visitors` are per-day and are averaged, never summed across days; the newest
+Search Console days (~2) and YouTube days (~3) are absent, not zero, and the
+charts stop at the source's last day instead of drawing a false drop; a follower
+count has no history before the nightly job started. `/reporting/*` needs its own
+`requireAdminAuth` line (`/reporting` alone matches only the exact path).
+
 ## Deploying
 
 Build and run via Docker (see `Dockerfile`) on the VPS, behind Caddy. See

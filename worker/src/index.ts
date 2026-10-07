@@ -55,6 +55,7 @@ import { OrderValidationError, priceOrder, totalCents, type OrderRecord } from "
 import { createPostgresOrdersRepository } from "./lib/ordersRepository";
 import { createPostgresOtpRepository } from "./lib/otpRepository";
 import { createPostgresPasswordResetTokensRepository } from "./lib/passwordResetTokensRepository";
+import { createPostgresAnalyticsRepository } from "./lib/analyticsRepository";
 import { createPostgresReportingRepository } from "./lib/reportingRepository";
 import {
   createPostgresCockpitReadRepository,
@@ -86,6 +87,8 @@ import {
   AdminOrderListResponseSchema,
   AdminOrderResultSchema,
   AdminOrderUpdateInputSchema,
+  AdminAnalyticsQuerySchema,
+  AdminAnalyticsResultSchema,
   AdminReportingResultSchema,
   AdminStatusInputSchema,
   AuthResultSchema,
@@ -136,6 +139,9 @@ const SUBSCRIBE_CONFIRM_TTL_DAYS = 7;
 // at startup over an integration nothing else in this app depends on.
 const reportingRepository = warehousePool
   ? createPostgresReportingRepository(warehousePool)
+  : undefined;
+const analyticsRepository = warehousePool
+  ? createPostgresAnalyticsRepository(warehousePool)
   : undefined;
 // Same split-role reasoning, one level narrower: the cockpit's read side
 // reuses warehousePool (warehouse_reader, SELECT-only everywhere); its
@@ -1078,6 +1084,7 @@ v1Admin.use("/customers/*", requireAdminAuth(adminSessionsRepository));
 v1Admin.use("/me", requireAdminAuth(adminSessionsRepository));
 v1Admin.use("/logout", requireAdminAuth(adminSessionsRepository));
 v1Admin.use("/reporting", requireAdminAuth(adminSessionsRepository));
+v1Admin.use("/reporting/*", requireAdminAuth(adminSessionsRepository));
 v1Admin.use("/cockpit", requireAdminAuth(adminSessionsRepository));
 v1Admin.use("/cockpit/*", requireAdminAuth(adminSessionsRepository));
 v1Admin.use("/post-predict", requireAdminAuth(adminSessionsRepository));
@@ -1335,6 +1342,37 @@ v1Admin.openapi(adminReportingRoute, async (c) => {
     },
     200,
   );
+});
+
+const adminAnalyticsRoute = createRoute({
+  method: "get",
+  path: "/reporting/analytics",
+  operationId: "adminReportingAnalytics",
+  summary:
+    "Followers, website traffic, Search Console and YouTube analytics (reads the sibling warehouse)",
+  security: [{ adminBearerAuth: [] }],
+  request: { query: AdminAnalyticsQuerySchema },
+  responses: {
+    200: {
+      content: { "application/json": { schema: AdminAnalyticsResultSchema } },
+      description: "One section per source; a source that cannot be read reports `unavailable`.",
+    },
+    503: {
+      content: { "application/json": { schema: ErrorResponseSchema } },
+      description: "WAREHOUSE_DATABASE_URL isn't configured on this deployment.",
+    },
+  },
+});
+v1Admin.openapi(adminAnalyticsRoute, async (c) => {
+  if (!analyticsRepository) {
+    return c.json(
+      { error: "reporting_not_configured", message: "WAREHOUSE_DATABASE_URL is not set." },
+      503,
+    );
+  }
+  const { days } = c.req.valid("query");
+  const range = days === "7" ? 7 : days === "90" ? 90 : 28;
+  return c.json(await analyticsRepository.getAnalytics(range), 200);
 });
 
 const adminCockpitRoute = createRoute({

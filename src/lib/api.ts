@@ -376,6 +376,76 @@ export type AdminReportingResult = {
   attributionCoverage: { attributed: number; unattributed: number };
 };
 
+// --- Admin analytics (followers, website, Search Console, YouTube - see
+// worker/src/lib/analyticsRepository.ts). Each source is its own section: one
+// that cannot be read says so and the rest still load. ---
+
+export type AnalyticsSection<T> = { status: "ok"; data: T } | { status: "unavailable" };
+export type AnalyticsDays = 7 | 28 | 90;
+
+export type FollowerPlatform = {
+  platform: string;
+  /** null = the platform did not report a count (e.g. a hidden YouTube count). */
+  current: number | null;
+  currentAt: string;
+  /** null until there are two readings: the history cannot be backfilled. */
+  change: number | null;
+  since: string;
+  history: { day: string; followers: number | null }[];
+};
+
+export type WebAnalytics = {
+  daily: { day: string; pageviews: number; sessions: number; visitors: number }[];
+  totals: { pageviews: number; sessions: number; avgVisitorsPerDay: number };
+  topPages: { path: string; pageviews: number; sessions: number }[];
+  sources: { source: string; medium: string; campaign: string; sessions: number }[];
+  actions: { eventName: string; events: number; sessions: number }[];
+  dataThrough: string | null;
+  builtAt: string | null;
+  isStale: boolean;
+};
+
+export type SearchTotals = { clicks: number; impressions: number; position: number | null };
+export type SearchRow = {
+  label: string;
+  clicks: number;
+  impressions: number;
+  position: number | null;
+};
+
+export type SearchAnalytics = {
+  web: { daily: { day: string; clicks: number; impressions: number }[]; totals: SearchTotals };
+  image: { totals: SearchTotals };
+  topQueries: SearchRow[];
+  topPages: SearchRow[];
+  /** Share of the site's web impressions that the page table accounts for. */
+  pageCoverage: number | null;
+  dataThrough: string | null;
+  fetchedAt: string | null;
+};
+
+export type YoutubeAnalytics = {
+  daily: { day: string; views: number; watchMinutes: number }[];
+  totals: {
+    views: number;
+    watchMinutes: number;
+    subscribersGained: number;
+    subscribersLost: number;
+  };
+  dataThrough: string | null;
+  fetchedAt: string | null;
+};
+
+export type AdminAnalyticsResult = {
+  days: AnalyticsDays;
+  from: string;
+  to: string;
+  followers: AnalyticsSection<FollowerPlatform[]>;
+  web: AnalyticsSection<WebAnalytics>;
+  search: AnalyticsSection<SearchAnalytics>;
+  youtube: AnalyticsSection<YoutubeAnalytics>;
+};
+
 // --- CEO cockpit (ARCHITECTURE.md section 4 - reads the sibling warehouse's
 // cockpit_alert table, see worker/src/lib/cockpitRepository.ts). Same
 // possibly-absent-deployment shape as reporting above. ---
@@ -609,6 +679,10 @@ export const adminApi = {
     ),
   getReporting: (token: string) =>
     apiFetch<AdminReportingResult>("/v1/admin/reporting", { headers: authHeader(token) }),
+  getAnalytics: (token: string, days: AnalyticsDays) =>
+    apiFetch<AdminAnalyticsResult>(`/v1/admin/reporting/analytics?days=${days}`, {
+      headers: authHeader(token),
+    }),
   getCockpit: (token: string) =>
     apiFetch<AdminCockpitResult>("/v1/admin/cockpit", { headers: authHeader(token) }),
   acknowledgeAlert: (token: string, alertId: string) =>
