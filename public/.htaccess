@@ -33,6 +33,18 @@ ErrorDocument 404 /404.html
 <IfModule mod_rewrite.c>
   RewriteEngine On
 
+  # Addresses from the previous static site (/pages/about.html, ...). Google and
+  # old links still request them and they 404 now that the site lives at
+  # /about/ etc. One permanent hop straight to the final apex URL - these sit
+  # BEFORE the www rule so www.dhakakacchi.com/pages/about.html does not take
+  # two hops.
+  RewriteRule ^pages/(about|history|order|subscribe)\.html$ https://dhakakacchi.com/$1/ [R=301,L]
+  # The old home page. The THE_REQUEST guard is required: for "/" Apache serves
+  # index.html internally, and without checking the ORIGINAL request line this
+  # would redirect "/" to "/" forever.
+  RewriteCond %{THE_REQUEST} \s/index\.html[\s?]
+  RewriteRule ^index\.html$ https://dhakakacchi.com/ [R=301,L]
+
   # www -> apex, 301. Both hostnames served identical content with no redirect,
   # so Google was seeing two duplicate sites.
   RewriteCond %{HTTP_HOST} ^www\.dhakakacchi\.com$ [NC]
