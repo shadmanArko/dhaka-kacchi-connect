@@ -436,6 +436,65 @@ export type YoutubeAnalytics = {
   fetchedAt: string | null;
 };
 
+// --- Tagged links (admin Link builder - worker/src/lib/trackedLinks.ts) ---
+
+export type TrackedLink = {
+  id: string;
+  createdAt: string;
+  label: string;
+  source: string;
+  medium: string;
+  campaign: string;
+  content: string;
+  destinationPath: string;
+  url: string;
+  /** Normalised URL of the published post, once attached. */
+  postUrl: string | null;
+};
+
+export type TrackedLinkInput = {
+  label: string;
+  source: string;
+  medium: string;
+  campaign: string;
+  content: string;
+  destinationPath?: string;
+};
+
+export type LinkPerformance = {
+  id: string;
+  label: string;
+  source: string;
+  medium: string;
+  campaign: string;
+  content: string;
+  postUrl: string | null;
+  createdAt: string;
+  sessions: number;
+  /** Purchase events attributed to this link, and how many matched a real order. */
+  purchases: number;
+  orders: number;
+  revenue: number;
+};
+
+export type LinkCoverage = {
+  total: number;
+  /** Visits from a link made in the Link builder. */
+  linked: number;
+  /** Tagged some other way (an old bio link, an ad, a typo). */
+  otherTagged: number;
+  /** No tag, but the browser named the site that sent the visitor. */
+  referral: number;
+  /** No tag and no referrer. */
+  direct: number;
+};
+
+export type LinksAnalytics = {
+  coverage: LinkCoverage;
+  links: LinkPerformance[];
+  totalLinks: number;
+};
+
 export type AdminAnalyticsResult = {
   days: AnalyticsDays;
   from: string;
@@ -444,6 +503,7 @@ export type AdminAnalyticsResult = {
   web: AnalyticsSection<WebAnalytics>;
   search: AnalyticsSection<SearchAnalytics>;
   youtube: AnalyticsSection<YoutubeAnalytics>;
+  links: AnalyticsSection<LinksAnalytics>;
 };
 
 // --- CEO cockpit (ARCHITECTURE.md section 4 - reads the sibling warehouse's
@@ -679,6 +739,20 @@ export const adminApi = {
     ),
   getReporting: (token: string) =>
     apiFetch<AdminReportingResult>("/v1/admin/reporting", { headers: authHeader(token) }),
+  listLinks: (token: string) =>
+    apiFetch<{ links: TrackedLink[] }>("/v1/admin/links", { headers: authHeader(token) }),
+  createLink: (token: string, input: TrackedLinkInput) =>
+    apiFetch<{ link: TrackedLink; created: boolean }>("/v1/admin/links", {
+      method: "POST",
+      headers: authHeader(token),
+      body: JSON.stringify(input),
+    }),
+  setLinkPost: (token: string, id: string, postUrl: string | null) =>
+    apiFetch<{ link: TrackedLink; created: boolean }>(`/v1/admin/links/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: authHeader(token),
+      body: JSON.stringify({ postUrl }),
+    }),
   getAnalytics: (token: string, days: AnalyticsDays) =>
     apiFetch<AdminAnalyticsResult>(`/v1/admin/reporting/analytics?days=${days}`, {
       headers: authHeader(token),

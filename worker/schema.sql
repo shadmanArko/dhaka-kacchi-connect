@@ -42,6 +42,7 @@
 -- "TEXT for values only ever passed through," TIMESTAMPTZ for values SQL
 -- itself needs to reason about.
 
+DROP TABLE IF EXISTS tracked_links;
 DROP TABLE IF EXISTS subscribers;
 DROP TABLE IF EXISTS events;
 DROP TABLE IF EXISTS order_items;
@@ -271,3 +272,21 @@ CREATE TABLE IF NOT EXISTS subscribers (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_subscribers_email ON subscribers(email);
 CREATE INDEX IF NOT EXISTS idx_subscribers_confirm_token_hash ON subscribers(confirm_token_hash);
+
+-- Tagged links created in the admin Link builder (added with
+-- migrations-manual/0004) - see that file's header for the design.
+CREATE TABLE IF NOT EXISTS tracked_links (
+  id                TEXT PRIMARY KEY,           -- e.g. "lnk_<uuid>"
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by        TEXT,
+  label             TEXT NOT NULL,
+  source            TEXT NOT NULL,
+  medium            TEXT NOT NULL,
+  campaign          TEXT NOT NULL,
+  content           TEXT NOT NULL,
+  destination_path  TEXT NOT NULL DEFAULT '/',
+  url               TEXT NOT NULL,
+  post_url          TEXT,
+  CONSTRAINT uq_tracked_links_source_content UNIQUE (source, content)
+);
+CREATE INDEX IF NOT EXISTS idx_tracked_links_created_at ON tracked_links(created_at DESC);

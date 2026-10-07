@@ -3,6 +3,7 @@ import type { Pool } from "pg";
 import { AdminAnalyticsResultSchema } from "../schemas";
 import {
   addDays,
+  coverageShares,
   coveredRange,
   createPostgresAnalyticsRepository,
   fillDays,
@@ -111,6 +112,25 @@ describe("followerTrend", () => {
   });
 });
 
+describe("coverageShares", () => {
+  it("divides each bucket by all visits", () => {
+    expect(
+      coverageShares({ total: 200, linked: 50, otherTagged: 10, referral: 40, direct: 100 }),
+    ).toEqual({
+      linked: 0.25,
+      otherTagged: 0.05,
+      referral: 0.2,
+      direct: 0.5,
+    });
+  });
+
+  it("is null, not 0%, when there were no visits", () => {
+    expect(
+      coverageShares({ total: 0, linked: 0, otherTagged: 0, referral: 0, direct: 0 }).linked,
+    ).toBeNull();
+  });
+});
+
 describe("isStale", () => {
   const now = new Date("2026-10-07T12:00:00Z");
   it("flags a build older than 36h, or none at all", () => {
@@ -125,6 +145,46 @@ describe("isStale", () => {
 function fakePool(failOn: string[] = []): Pool {
   const answer = (sql: string): { rows: unknown[] } => {
     if (sql.includes("AS today")) return { rows: [{ today: "2026-10-07" }] };
+    if (sql.includes("FROM tracked_link") && sql.includes("GROUP BY utm_source, utm_content")) {
+      return {
+        rows: [
+          {
+            id: "lnk_1",
+            label: "Reel - kacchi pot",
+            source: "instagram",
+            medium: "organic_social",
+            campaign: "batch-2026-10-10",
+            content: "reel-kacchi-pot",
+            post_url: "https://instagram.com/p/AAA",
+            created_at: "2026-10-02T09:00:00Z",
+            sessions: "12",
+            purchases: "3",
+            orders: "2",
+            revenue: "58.50",
+          },
+          {
+            id: "lnk_2",
+            label: "Story",
+            source: "whatsapp",
+            medium: "message",
+            campaign: "batch-2026-10-10",
+            content: "broadcast-friday",
+            post_url: null,
+            created_at: "2026-10-03T09:00:00Z",
+            sessions: "0",
+            purchases: "0",
+            orders: "0",
+            revenue: "0",
+          },
+        ],
+      };
+    }
+    if (sql.includes("WITH a AS")) {
+      return {
+        rows: [{ total: "100", linked: "20", other_tagged: "10", referral: "30", direct: "40" }],
+      };
+    }
+    if (sql.includes("count(*)::text AS n FROM tracked_link")) return { rows: [{ n: "7" }] };
     if (sql.includes("FROM social_account_daily") && sql.includes("followers_fetched_at")) {
       return {
         rows: [
@@ -308,6 +368,36 @@ describe("createPostgresAnalyticsRepository", () => {
       expect(result.web.status).toBe("ok");
       expect(result.followers.status).toBe("ok");
       expect(result.youtube.status).toBe("ok");
+      expect(AdminAnalyticsResultSchema.safeParse(result).success).toBe(true);
+    } finally {
+      console.error = originalError;
+    }
+  });
+
+  it("reports which visits came from tagged links, and each link's results", async () => {
+    const result = await createPostgresAnalyticsRepository(fakePool(), now).getAnalytics(28);
+    if (result.links.status !== "ok") throw new Error("links unavailable");
+    expect(result.links.data.coverage).toEqual({
+      total: 100,
+      linked: 20,
+      otherTagged: 10,
+      referral: 30,
+      direct: 40,
+    });
+    expect(result.links.data.totalLinks).toBe(7);
+    expect(result.links.data.links[0]).toMatchObject({ sessions: 12, orders: 2, revenue: 58.5 });
+    // A link nobody visited is still listed - "this post drove nothing" is an answer.
+    expect(result.links.data.links[1]).toMatchObject({ sessions: 0, revenue: 0, postUrl: null });
+  });
+
+  it("a missing links table blanks only that block", async () => {
+    const repo = createPostgresAnalyticsRepository(fakePool(["tracked_link"]), now);
+    const originalError = console.error;
+    console.error = () => {};
+    try {
+      const result = await repo.getAnalytics(28);
+      expect(result.links.status).toBe("unavailable");
+      expect(result.web.status).toBe("ok");
       expect(AdminAnalyticsResultSchema.safeParse(result).success).toBe(true);
     } finally {
       console.error = originalError;

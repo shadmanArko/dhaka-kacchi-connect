@@ -57,6 +57,8 @@ import { createPostgresOtpRepository } from "./lib/otpRepository";
 import { createPostgresPasswordResetTokensRepository } from "./lib/passwordResetTokensRepository";
 import { createPostgresAnalyticsRepository } from "./lib/analyticsRepository";
 import { createPostgresReportingRepository } from "./lib/reportingRepository";
+import { createPostgresTrackedLinksRepository } from "./lib/trackedLinksRepository";
+import { buildTrackedUrl, normalizePostUrl, normalizeTag, validateTags } from "./lib/trackedLinks";
 import {
   createPostgresCockpitReadRepository,
   createPostgresCockpitWriteRepository,
@@ -88,6 +90,10 @@ import {
   AdminOrderResultSchema,
   AdminOrderUpdateInputSchema,
   AdminAnalyticsQuerySchema,
+  TrackedLinkInputSchema,
+  TrackedLinkListSchema,
+  TrackedLinkPostInputSchema,
+  TrackedLinkResultSchema,
   AdminAnalyticsResultSchema,
   AdminReportingResultSchema,
   AdminStatusInputSchema,
@@ -140,6 +146,7 @@ const SUBSCRIBE_CONFIRM_TTL_DAYS = 7;
 const reportingRepository = warehousePool
   ? createPostgresReportingRepository(warehousePool)
   : undefined;
+const trackedLinksRepository = createPostgresTrackedLinksRepository(pool);
 const analyticsRepository = warehousePool
   ? createPostgresAnalyticsRepository(warehousePool)
   : undefined;
@@ -1085,6 +1092,8 @@ v1Admin.use("/me", requireAdminAuth(adminSessionsRepository));
 v1Admin.use("/logout", requireAdminAuth(adminSessionsRepository));
 v1Admin.use("/reporting", requireAdminAuth(adminSessionsRepository));
 v1Admin.use("/reporting/*", requireAdminAuth(adminSessionsRepository));
+v1Admin.use("/links", requireAdminAuth(adminSessionsRepository));
+v1Admin.use("/links/*", requireAdminAuth(adminSessionsRepository));
 v1Admin.use("/cockpit", requireAdminAuth(adminSessionsRepository));
 v1Admin.use("/cockpit/*", requireAdminAuth(adminSessionsRepository));
 v1Admin.use("/post-predict", requireAdminAuth(adminSessionsRepository));
@@ -1373,6 +1382,150 @@ v1Admin.openapi(adminAnalyticsRoute, async (c) => {
   const { days } = c.req.valid("query");
   const range = days === "7" ? 7 : days === "90" ? 90 : 28;
   return c.json(await analyticsRepository.getAnalytics(range), 200);
+});
+
+const adminListLinksRoute = createRoute({
+  method: "get",
+  path: "/links",
+  operationId: "adminListLinks",
+  summary: "Tagged links created in the Link builder, newest first",
+  security: [{ adminBearerAuth: [] }],
+  responses: {
+    200: {
+      content: { "application/json": { schema: TrackedLinkListSchema } },
+      description: "The most recent links.",
+    },
+  },
+});
+v1Admin.openapi(adminListLinksRoute, async (c) => {
+  return c.json({ links: await trackedLinksRepository.list(500) }, 200);
+});
+
+const adminCreateLinkRoute = createRoute({
+  method: "post",
+  path: "/links",
+  operationId: "adminCreateLink",
+  summary: "Create a tagged link (or return the identical one that already exists)",
+  security: [{ adminBearerAuth: [] }],
+  request: {
+    body: { content: { "application/json": { schema: TrackedLinkInputSchema } }, required: true },
+  },
+  responses: {
+    201: {
+      content: { "application/json": { schema: TrackedLinkResultSchema } },
+      description: "The link was created.",
+    },
+    200: {
+      content: { "application/json": { schema: TrackedLinkResultSchema } },
+      description: "An identical link already existed; it is returned unchanged.",
+    },
+    400: {
+      content: { "application/json": { schema: ErrorResponseSchema } },
+      description: "A tag is not allowed.",
+    },
+    409: {
+      content: { "application/json": { schema: ErrorResponseSchema } },
+      description: "This source and content are already used by a different link.",
+    },
+  },
+});
+v1Admin.openapi(adminCreateLinkRoute, async (c) => {
+  const body = c.req.valid("json");
+  const tags = {
+    source: normalizeTag(body.source),
+    medium: normalizeTag(body.medium),
+    campaign: normalizeTag(body.campaign),
+    content: normalizeTag(body.content),
+  };
+  const destinationPath = (body.destinationPath ?? "/").trim() || "/";
+
+  const problems = validateTags(tags, destinationPath);
+  if (problems.length > 0) {
+    return c.json({ error: "invalid_tags", message: problems.join(" ") }, 400);
+  }
+
+  const url = buildTrackedUrl(config.publicSiteUrl, tags, destinationPath);
+  const outcome = await trackedLinksRepository.insert({
+    id: newId("lnk"),
+    createdBy: c.get("adminUserId"),
+    label: body.label,
+    ...tags,
+    destinationPath,
+    url,
+  });
+
+  const stored = await trackedLinksRepository.findBySourceContent(tags.source, tags.content);
+  if (!stored) {
+    return c.json({ error: "link_not_found", message: "The link could not be read back." }, 400);
+  }
+  if (outcome === "created") return c.json({ link: stored, created: true }, 201);
+
+  // Same source+content already exists. Identical details = the person tapped twice
+  // or re-made a link they already had: hand it back. Different details = a real
+  // clash, which must not silently reuse (or overwrite) the other link.
+  const identical =
+    stored.medium === tags.medium &&
+    stored.campaign === tags.campaign &&
+    stored.destinationPath === destinationPath;
+  if (identical) return c.json({ link: stored, created: false }, 200);
+  return c.json(
+    {
+      error: "link_exists",
+      message: `"${tags.source}" + "${tags.content}" is already used by "${stored.label}" (campaign ${stored.campaign}, medium ${stored.medium}). Choose a different content name.`,
+    },
+    409,
+  );
+});
+
+const adminSetLinkPostRoute = createRoute({
+  method: "patch",
+  path: "/links/{id}",
+  operationId: "adminSetLinkPost",
+  summary: "Attach (or clear) the published post a link belongs to",
+  security: [{ adminBearerAuth: [] }],
+  request: {
+    params: z.object({ id: z.string().min(1).max(80) }),
+    body: {
+      content: { "application/json": { schema: TrackedLinkPostInputSchema } },
+      required: true,
+    },
+  },
+  responses: {
+    200: {
+      content: { "application/json": { schema: TrackedLinkResultSchema } },
+      description: "The updated link.",
+    },
+    400: {
+      content: { "application/json": { schema: ErrorResponseSchema } },
+      description: "Not a link to a post on a supported platform.",
+    },
+    404: {
+      content: { "application/json": { schema: ErrorResponseSchema } },
+      description: "No such link.",
+    },
+  },
+});
+v1Admin.openapi(adminSetLinkPostRoute, async (c) => {
+  const { id } = c.req.valid("param");
+  const { postUrl } = c.req.valid("json");
+
+  let normalized: string | null = null;
+  if (postUrl !== null && postUrl.trim() !== "") {
+    normalized = normalizePostUrl(postUrl);
+    if (!normalized) {
+      return c.json(
+        {
+          error: "invalid_post_url",
+          message:
+            "That isn't a link to a post on Instagram, Facebook, Threads or YouTube. Paste the post's own link.",
+        },
+        400,
+      );
+    }
+  }
+  const updated = await trackedLinksRepository.setPostUrl(id, normalized);
+  if (!updated) return c.json({ error: "not_found", message: "No link with that id." }, 404);
+  return c.json({ link: updated, created: false }, 200);
 });
 
 const adminCockpitRoute = createRoute({

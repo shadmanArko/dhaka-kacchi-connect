@@ -78,6 +78,12 @@ function AdminChrome() {
               Reporting
             </Link>
             <Link
+              to="/admin/links"
+              className="font-sans text-sm text-muted-foreground hover:text-foreground data-[status=active]:text-foreground data-[status=active]:font-medium"
+            >
+              Links
+            </Link>
+            <Link
               to="/admin/cockpit"
               className="font-sans text-sm text-muted-foreground hover:text-foreground data-[status=active]:text-foreground data-[status=active]:font-medium"
             >

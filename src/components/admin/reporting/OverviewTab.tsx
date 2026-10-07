@@ -2,6 +2,7 @@ import type { AdminAnalyticsResult } from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import { AreaChart } from "./charts";
 import { FollowerCards } from "./FollowerCards";
+import { LinkCoverageCard } from "./LinkCoverageCard";
 import { totalFollowers } from "./followers";
 import {
   ago,
@@ -102,6 +103,17 @@ export function OverviewTab({ analytics }: { analytics: AdminAnalyticsResult }) 
           )}
         </Panel>
       </div>
+
+      <Panel
+        title="Where visits come from"
+        note="How much of your website traffic can be traced to a specific link you made."
+      >
+        {analytics.links.status === "ok" ? (
+          <LinkCoverageCard coverage={analytics.links.data.coverage} />
+        ) : (
+          <Unavailable what="Link tracking" />
+        )}
+      </Panel>
 
       <Panel
         title="Followers"

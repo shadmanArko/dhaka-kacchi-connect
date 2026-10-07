@@ -25,6 +25,7 @@ import { Route as LocaleLayoutIndexRouteImport } from './routes/$locale/_layout.
 import { Route as AdminLayoutReportingRouteImport } from './routes/admin/_layout.reporting'
 import { Route as AdminLayoutPostPredictRouteImport } from './routes/admin/_layout.post-predict'
 import { Route as AdminLayoutLoginRouteImport } from './routes/admin/_layout.login'
+import { Route as AdminLayoutLinksRouteImport } from './routes/admin/_layout.links'
 import { Route as AdminLayoutCockpitRouteImport } from './routes/admin/_layout.cockpit'
 import { Route as LocaleLayoutTermsRouteImport } from './routes/$locale/_layout.terms'
 import { Route as LocaleLayoutSubscribeRouteImport } from './routes/$locale/_layout.subscribe'
@@ -116,6 +117,11 @@ const AdminLayoutLoginRoute = AdminLayoutLoginRouteImport.update({
   path: '/login',
   getParentRoute: () => AdminLayoutRoute,
 } as any)
+const AdminLayoutLinksRoute = AdminLayoutLinksRouteImport.update({
+  id: '/links',
+  path: '/links',
+  getParentRoute: () => AdminLayoutRoute,
+} as any)
 const AdminLayoutCockpitRoute = AdminLayoutCockpitRouteImport.update({
   id: '/cockpit',
   path: '/cockpit',
@@ -189,6 +195,7 @@ export interface FileRoutesByFullPath {
   '/$locale/subscribe': typeof LocaleLayoutSubscribeRoute
   '/$locale/terms': typeof LocaleLayoutTermsRoute
   '/admin/cockpit': typeof AdminLayoutCockpitRoute
+  '/admin/links': typeof AdminLayoutLinksRoute
   '/admin/login': typeof AdminLayoutLoginRoute
   '/admin/post-predict': typeof AdminLayoutPostPredictRoute
   '/admin/reporting': typeof AdminLayoutReportingRoute
@@ -215,6 +222,7 @@ export interface FileRoutesByTo {
   '/$locale/subscribe': typeof LocaleLayoutSubscribeRoute
   '/$locale/terms': typeof LocaleLayoutTermsRoute
   '/admin/cockpit': typeof AdminLayoutCockpitRoute
+  '/admin/links': typeof AdminLayoutLinksRoute
   '/admin/login': typeof AdminLayoutLoginRoute
   '/admin/post-predict': typeof AdminLayoutPostPredictRoute
   '/admin/reporting': typeof AdminLayoutReportingRoute
@@ -244,6 +252,7 @@ export interface FileRoutesById {
   '/$locale/_layout/subscribe': typeof LocaleLayoutSubscribeRoute
   '/$locale/_layout/terms': typeof LocaleLayoutTermsRoute
   '/admin/_layout/cockpit': typeof AdminLayoutCockpitRoute
+  '/admin/_layout/links': typeof AdminLayoutLinksRoute
   '/admin/_layout/login': typeof AdminLayoutLoginRoute
   '/admin/_layout/post-predict': typeof AdminLayoutPostPredictRoute
   '/admin/_layout/reporting': typeof AdminLayoutReportingRoute
@@ -274,6 +283,7 @@ export interface FileRouteTypes {
     | '/$locale/subscribe'
     | '/$locale/terms'
     | '/admin/cockpit'
+    | '/admin/links'
     | '/admin/login'
     | '/admin/post-predict'
     | '/admin/reporting'
@@ -300,6 +310,7 @@ export interface FileRouteTypes {
     | '/$locale/subscribe'
     | '/$locale/terms'
     | '/admin/cockpit'
+    | '/admin/links'
     | '/admin/login'
     | '/admin/post-predict'
     | '/admin/reporting'
@@ -328,6 +339,7 @@ export interface FileRouteTypes {
     | '/$locale/_layout/subscribe'
     | '/$locale/_layout/terms'
     | '/admin/_layout/cockpit'
+    | '/admin/_layout/links'
     | '/admin/_layout/login'
     | '/admin/_layout/post-predict'
     | '/admin/_layout/reporting'
@@ -464,6 +476,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminLayoutLoginRouteImport
       parentRoute: typeof AdminLayoutRoute
     }
+    '/admin/_layout/links': {
+      id: '/admin/_layout/links'
+      path: '/links'
+      fullPath: '/admin/links'
+      preLoaderRoute: typeof AdminLayoutLinksRouteImport
+      parentRoute: typeof AdminLayoutRoute
+    }
     '/admin/_layout/cockpit': {
       id: '/admin/_layout/cockpit'
       path: '/cockpit'
@@ -567,6 +586,7 @@ const LocaleLayoutRouteWithChildren = LocaleLayoutRoute._addFileChildren(
 
 interface AdminLayoutRouteChildren {
   AdminLayoutCockpitRoute: typeof AdminLayoutCockpitRoute
+  AdminLayoutLinksRoute: typeof AdminLayoutLinksRoute
   AdminLayoutLoginRoute: typeof AdminLayoutLoginRoute
   AdminLayoutPostPredictRoute: typeof AdminLayoutPostPredictRoute
   AdminLayoutReportingRoute: typeof AdminLayoutReportingRoute
@@ -576,6 +596,7 @@ interface AdminLayoutRouteChildren {
 
 const AdminLayoutRouteChildren: AdminLayoutRouteChildren = {
   AdminLayoutCockpitRoute: AdminLayoutCockpitRoute,
+  AdminLayoutLinksRoute: AdminLayoutLinksRoute,
   AdminLayoutLoginRoute: AdminLayoutLoginRoute,
   AdminLayoutPostPredictRoute: AdminLayoutPostPredictRoute,
   AdminLayoutReportingRoute: AdminLayoutReportingRoute,

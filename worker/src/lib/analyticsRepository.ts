@@ -114,6 +114,42 @@ export interface YoutubeAnalytics {
   fetchedAt: string | null;
 }
 
+export interface LinkPerformance {
+  id: string;
+  label: string;
+  source: string;
+  medium: string;
+  campaign: string;
+  content: string;
+  /** Normalised post URL once the person has attached it. */
+  postUrl: string | null;
+  createdAt: string;
+  sessions: number;
+  /** Purchase events attributed to this link, and how many matched a real order. */
+  purchases: number;
+  orders: number;
+  revenue: number;
+}
+
+export interface LinkCoverage {
+  total: number;
+  /** Visits from a link made in the Link builder. */
+  linked: number;
+  /** Tagged some other way (an old bio link, an ad, a typo). */
+  otherTagged: number;
+  /** No tag, but the visitor's browser named the site that sent them. */
+  referral: number;
+  /** No tag and no referrer: typed in, bookmarked, or a share that strips both. */
+  direct: number;
+}
+
+export interface LinksAnalytics {
+  coverage: LinkCoverage;
+  links: LinkPerformance[];
+  /** Links in the Link builder, ever (the table above is capped). */
+  totalLinks: number;
+}
+
 export interface AnalyticsResult {
   days: AnalyticsRange;
   from: string;
@@ -122,6 +158,7 @@ export interface AnalyticsResult {
   web: Section<WebAnalytics>;
   search: Section<SearchAnalytics>;
   youtube: Section<YoutubeAnalytics>;
+  links: Section<LinksAnalytics>;
 }
 
 export interface AnalyticsRepository {
@@ -190,6 +227,19 @@ export function weightedPosition(rows: { impressions: number; position: number }
   const impressions = rows.reduce((s, r) => s + r.impressions, 0);
   if (impressions === 0) return null;
   return rows.reduce((s, r) => s + r.position * r.impressions, 0) / impressions;
+}
+
+/** Shares of a coverage breakdown, null (not 0%) when there were no visits at all. */
+export function coverageShares(
+  c: LinkCoverage,
+): Record<keyof Omit<LinkCoverage, "total">, number | null> {
+  const share = (n: number) => (c.total > 0 ? n / c.total : null);
+  return {
+    linked: share(c.linked),
+    otherTagged: share(c.otherTagged),
+    referral: share(c.referral),
+    direct: share(c.direct),
+  };
 }
 
 export function followerTrend(
@@ -523,8 +573,99 @@ export function createPostgresAnalyticsRepository(
         } satisfies YoutubeAnalytics;
       });
 
-      const [f, w, s, y] = await Promise.all([followers, web, search, youtube]);
-      return { days, from, to, followers: f, web: w, search: s, youtube: y };
+      const links = section(async () => {
+        const [coverageRes, linksRes, countRes] = await Promise.all([
+          pool.query<{
+            total: string;
+            linked: string;
+            other_tagged: string;
+            referral: string;
+            direct: string;
+          }>(
+            `WITH a AS (
+               SELECT wa.utm_source, wa.referring_domain, wa.sessions,
+                      EXISTS (SELECT 1 FROM tracked_link t
+                              WHERE t.source = wa.utm_source AND t.content = wa.utm_content) AS is_link
+               FROM web_acquisition_daily wa WHERE wa.day BETWEEN $1::date AND $2::date
+             )
+             SELECT coalesce(sum(sessions), 0)::text AS total,
+                    coalesce(sum(sessions) FILTER (WHERE is_link), 0)::text AS linked,
+                    coalesce(sum(sessions) FILTER (WHERE NOT is_link AND utm_source <> ''), 0)::text AS other_tagged,
+                    coalesce(sum(sessions) FILTER (WHERE utm_source = '' AND referring_domain <> ''), 0)::text AS referral,
+                    coalesce(sum(sessions) FILTER (WHERE utm_source = '' AND referring_domain = ''), 0)::text AS direct
+             FROM a`,
+            [from, to],
+          ),
+          pool.query<{
+            id: string;
+            label: string;
+            source: string;
+            medium: string;
+            campaign: string;
+            content: string;
+            post_url: string | null;
+            created_at: string;
+            sessions: string;
+            purchases: string;
+            orders: string;
+            revenue: string;
+          }>(
+            `SELECT t.external_id AS id, t.label, t.source, t.medium, t.campaign, t.content, t.post_url,
+                    to_char(t.link_created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at,
+                    coalesce(a.sessions, 0)::text AS sessions,
+                    coalesce(p.purchases, 0)::text AS purchases,
+                    coalesce(p.orders, 0)::text AS orders,
+                    coalesce(p.revenue, 0)::text AS revenue
+             FROM tracked_link t
+             LEFT JOIN (
+               SELECT utm_source, utm_content, sum(sessions) AS sessions
+               FROM web_acquisition_daily WHERE day BETWEEN $1::date AND $2::date
+               GROUP BY utm_source, utm_content
+             ) a ON a.utm_source = t.source AND a.utm_content = t.content
+             LEFT JOIN (
+               SELECT e.campaign_variant_id, count(*) AS purchases, count(o.id) AS orders,
+                      coalesce(sum(o.gross), 0) AS revenue
+               FROM event e
+               LEFT JOIN orders o ON o.external_id = e.properties ->> 'source_order_id'
+               WHERE e.event_name = 'purchase' AND e.campaign_variant_id IS NOT NULL
+                 AND (e.occurred_at AT TIME ZONE 'Europe/Berlin')::date BETWEEN $1::date AND $2::date
+               GROUP BY e.campaign_variant_id
+             ) p ON p.campaign_variant_id = t.campaign_variant_id
+             ORDER BY coalesce(a.sessions, 0) DESC, t.link_created_at DESC, t.external_id
+             LIMIT 50`,
+            [from, to],
+          ),
+          pool.query<{ n: string }>(`SELECT count(*)::text AS n FROM tracked_link`),
+        ]);
+        const c = coverageRes.rows[0]!;
+        return {
+          coverage: {
+            total: n(c.total),
+            linked: n(c.linked),
+            otherTagged: n(c.other_tagged),
+            referral: n(c.referral),
+            direct: n(c.direct),
+          },
+          links: linksRes.rows.map((r) => ({
+            id: r.id,
+            label: r.label,
+            source: r.source,
+            medium: r.medium,
+            campaign: r.campaign,
+            content: r.content,
+            postUrl: r.post_url,
+            createdAt: r.created_at,
+            sessions: n(r.sessions),
+            purchases: n(r.purchases),
+            orders: n(r.orders),
+            revenue: n(r.revenue),
+          })),
+          totalLinks: n(countRes.rows[0]?.n),
+        } satisfies LinksAnalytics;
+      });
+
+      const [f, w, s, y, l] = await Promise.all([followers, web, search, youtube, links]);
+      return { days, from, to, followers: f, web: w, search: s, youtube: y, links: l };
     },
   };
 }
