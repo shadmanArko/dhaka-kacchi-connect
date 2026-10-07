@@ -52,13 +52,19 @@ const URL_KEY = /(url|referrer|href)$/i;
  * `$initial_` prefix. A real click id is a per-click identifier that ad
  * networks can join back to a person, which is exactly what must not leave.
  *
+ * MATCHED BY THE END OF THE NAME, not by a list of prefixes. PostHog derives
+ * variants such as `$initial_fbclid` and `$session_entry_fbclid` (the click id of
+ * the visit's landing page), and a prefix list missed the second one: it reached
+ * production on 2026-10-07 and was caught by asking PostHog what the live site
+ * had actually sent. Suffix matching also covers a variant not yet invented.
+ *
  * `fbc` / `fbp` are Facebook's cookies, which PostHog copies into person
  * properties as `$fbc` / `$fbp`. `$fbc` was observed carrying the click id
  * inside its value ("fb.1.<time>.<fbclid>"); `$fbp` is Facebook's persistent
  * browser id - same family, not observed, dropped for the same reason. The
  * optional `$` prefix is why the pattern allows `$` as well as `$initial_`. */
 const CLICK_ID_KEY =
-  /^(\$initial_|\$)?(gclid|gad_source|gclsrc|dclid|gbraid|wbraid|fbclid|msclkid|twclid|li_fat_id|mc_cid|igshid|ttclid|rdt_cid|epik|qclid|sccid|_kx|irclid|fbc|fbp)$/i;
+  /(?:^|[$_])(gclid|gad_source|gclsrc|dclid|gbraid|wbraid|fbclid|msclkid|twclid|li_fat_id|mc_cid|igshid|ttclid|rdt_cid|epik|qclid|sccid|kx|irclid|fbc|fbp)$/i;
 
 /** Returns `raw` with every query parameter outside the allowlist removed, plus
  * any #fragment and any user:password@ part. Anything that is not a string, or

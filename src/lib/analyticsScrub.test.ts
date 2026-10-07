@@ -200,6 +200,28 @@ describe("scrubEvent", () => {
     expect(out.$set_once?.$initial_utm_source).toBe("ig");
   });
 
+  it("drops derived click-id variants, e.g. $session_entry_fbclid (leaked to production once)", () => {
+    // Found by querying the live PostHog after the first version shipped: the URL
+    // and the plain fbclid were clean, but PostHog also stores the landing page's
+    // click id under a name built from a prefix the first rule did not list.
+    const out = scrubEvent({
+      event: "$pageview",
+      properties: {
+        $session_entry_fbclid: "FBVERIFYTEST",
+        $session_entry_gclid: "GVERIFYTEST",
+        $initial_msclkid: "MSVERIFYTEST",
+        $some_future_prefix_ttclid: "TTVERIFYTEST",
+        _kx: "KXVERIFYTEST",
+        $session_entry_utm_source: "ig",
+        $session_entry_pathname: "/",
+      },
+    });
+    const text = JSON.stringify(out);
+    expect(text).not.toContain("VERIFYTEST");
+    expect(out.properties?.$session_entry_utm_source).toBe("ig");
+    expect(out.properties?.$session_entry_pathname).toBe("/");
+  });
+
   it("drops Facebook's cookie copies ($fbc embeds the click id in its value)", () => {
     // Observed: $set: { "$fbc": "fb.1.1791378119665.<fbclid>" } on every pageview.
     const out = scrubEvent({
