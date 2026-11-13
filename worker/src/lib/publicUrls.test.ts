@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { derivePublicApiUrl } from "./config";
+import { derivePublicApiUrl } from "./publicUrls";
 
 describe("derivePublicApiUrl", () => {
   it("uses an explicit value, without a trailing slash", () => {

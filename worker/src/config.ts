@@ -7,6 +7,7 @@
  * once at import time (not lazily at first request), and required vars
  * have no silent default.
  */
+import { derivePublicApiUrl } from "./lib/publicUrls";
 import "dotenv/config"; // no-op if there's no .env file; never overrides an already-set process.env var
 
 export class ConfigError extends Error {
@@ -99,26 +100,6 @@ function required(env: NodeJS.ProcessEnv, name: string): string {
 /** Reads an optional var; returns undefined (not empty string) if unset. */
 function optional(env: NodeJS.ProcessEnv, name: string): string | undefined {
   return env[name]?.trim() || undefined;
-}
-
-/** The API's own public URL: PUBLIC_API_URL if set, otherwise guessed from the
- * site URL ("https://dhakakacchi.com" -> "https://api.dhakakacchi.com"), or the
- * local port in dev. Exported for tests. */
-export function derivePublicApiUrl(
-  explicit: string | undefined,
-  siteUrl: string,
-  port: number,
-): string {
-  if (explicit) return explicit.replace(/\/+$/, "");
-  try {
-    const url = new URL(siteUrl);
-    if (url.hostname === "localhost" || url.hostname === "127.0.0.1") {
-      return `http://localhost:${port}`;
-    }
-    return `${url.protocol}//api.${url.hostname.replace(/^www\./, "")}`;
-  } catch {
-    return `http://localhost:${port}`;
-  }
 }
 
 /** Builds and validates an AppConfig from a given env map. Exported (and
