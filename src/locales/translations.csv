@@ -240,6 +240,7 @@ key,en,de
 "order.loggedInAs","Logged in as","Angemeldet als"
 "order.logout","Log out","Abmelden"
 "order.yourItems","Your Items","Ihre Artikel"
+"order.boxSizeNote","The ml figures are the size of the box, not the weight of the food.","Die ml-Angaben beschreiben die Größe der Box, nicht das Gewicht der Speisen."
 "order.decrease","Decrease {{name}}","{{name}} verringern"
 "order.increase","Increase {{name}}","{{name}} erhöhen"
 "order.deliverySaturday","Delivery Saturday","Liefer-Samstag"

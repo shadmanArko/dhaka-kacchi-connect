@@ -13,7 +13,7 @@ import { normalizePhone } from "./lib/phone";
 export const MenuItemSchema = z
   .object({
     sku: z.string().openapi({ example: "kacchi_taster" }),
-    name: z.string().openapi({ example: "Kacchi Biriyani — Taster Box (750ml, 1 person)" }),
+    name: z.string().openapi({ example: "Kacchi Biriyani — Taster Box (750ml)" }),
     priceCents: z.number().int().openapi({ example: 999 }),
     description: z.string().openapi({ example: "1 piece of lamb, 1 whole potato, fresh salad." }),
   })

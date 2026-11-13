@@ -26,9 +26,11 @@ how it got built, not the backend's own reference.
 - **No minimum order quantity** (old site's 2-plate minimum is dropped).
 - **Menu (only 2 items):**
   - Kacchi Biriyani — two sizes:
-    - Taster Box — €9.99, 750ml, 1 person: 1 piece lamb, 1 whole potato, fresh salad.
-    - Regular Box — €15.00 (best value), 1000ml, 2 people: 2 pieces lamb,
+    - Taster Box — €9.99, 750ml box: 1 piece lamb, 1 whole potato, fresh salad.
+    - Regular Box — €15.00 (best value), 1000ml box: 2 pieces lamb,
       1 whole potato, fresh salad, homemade chutney.
+  - ml figures are the size (volume) of the box, not the weight of the food;
+    no serving counts are shown (a Regular Box can feed one person too).
   - Shahi Borhani (add-on) — €6.00, 500ml, yogurt-based drink with mint/spices.
 - **Fulfillment (updated 2026-09-08, distance method changed 2026-09-08 —
   replaces the old fixed-station list below, which is retired):**

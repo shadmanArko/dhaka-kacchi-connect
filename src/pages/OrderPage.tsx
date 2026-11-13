@@ -765,6 +765,9 @@ export function OrderPage() {
                     </div>
                   </div>
                 ))}
+                <p className="font-sans text-[0.78rem] leading-[1.6] text-muted-warm">
+                  {t("order.boxSizeNote")}
+                </p>
                 {problemFor("order-items") && (
                   <p role="alert" className="font-sans text-sm text-red-400">
                     {problemFor("order-items")}
