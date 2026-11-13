@@ -258,19 +258,26 @@ CREATE INDEX IF NOT EXISTS idx_events_occurred_at ON events(occurred_at);
 CREATE INDEX IF NOT EXISTS idx_events_customer_id ON events(customer_id) WHERE customer_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_events_ip_address_occurred_at ON events(ip_address, occurred_at);
 
--- Newsletter list (added with migrations-manual/0003) - see that file's header
--- for the double opt-in design.
+-- Newsletter list (migrations-manual/0003). The API also creates/upgrades this
+-- table itself at startup (subscribersRepository.ensureSchema), so on a normal
+-- deploy nothing has to be run by hand. Double opt-in: pending -> confirmed;
+-- unsubscribed rows are kept (never re-mailed) so a re-signup is recognised.
 CREATE TABLE IF NOT EXISTS subscribers (
-  id                  TEXT PRIMARY KEY,           -- e.g. "sub_<uuid>"
-  created_at          TEXT NOT NULL,
-  email               TEXT NOT NULL,              -- lowercased
-  locale              TEXT NOT NULL DEFAULT 'en',
-  status              TEXT NOT NULL DEFAULT 'pending',
-  confirm_token_hash  TEXT,
-  confirm_expires_at  TIMESTAMPTZ,
-  confirmed_at        TIMESTAMPTZ
+  id                        TEXT PRIMARY KEY,           -- e.g. "sub_<uuid>"
+  created_at                TEXT NOT NULL,
+  email                     TEXT NOT NULL,              -- lowercased
+  locale                    TEXT NOT NULL DEFAULT 'en',
+  status                    TEXT NOT NULL DEFAULT 'pending',  -- pending | confirmed | unsubscribed
+  confirm_token_hash        TEXT,
+  confirm_expires_at        TIMESTAMPTZ,
+  confirmed_at              TIMESTAMPTZ,
+  source                    TEXT,
+  unsubscribe_token         TEXT NOT NULL DEFAULT replace(gen_random_uuid()::text, '-', ''),
+  unsubscribed_at           TIMESTAMPTZ,
+  last_confirmation_sent_at TIMESTAMPTZ
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_subscribers_email ON subscribers(email);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_subscribers_unsubscribe_token ON subscribers(unsubscribe_token);
 CREATE INDEX IF NOT EXISTS idx_subscribers_confirm_token_hash ON subscribers(confirm_token_hash);
 
 -- Tagged links created in the admin Link builder (added with

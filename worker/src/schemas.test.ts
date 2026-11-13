@@ -1,5 +1,10 @@
 import { describe, expect, it } from "bun:test";
-import { OrderInputSchema, RegisterInputSchema, VerifyOtpInputSchema } from "./schemas";
+import {
+  OrderInputSchema,
+  RegisterInputSchema,
+  SubscribeInputSchema,
+  VerifyOtpInputSchema,
+} from "./schemas";
 
 const validRegister = {
   phone: "0170 1234567",
@@ -62,5 +67,28 @@ describe("OrderInputSchema", () => {
     expect(OrderInputSchema.safeParse({ ...order, customerName: "  " }).success).toBe(false);
     expect(OrderInputSchema.safeParse({ ...order, notes: "x".repeat(1001) }).success).toBe(false);
     expect(OrderInputSchema.safeParse({ ...order, notes: "ok" }).success).toBe(true);
+  });
+});
+
+describe("SubscribeInputSchema", () => {
+  it("lowercases and trims the email and fills defaults", () => {
+    const parsed = SubscribeInputSchema.parse({ email: "  Some.One@Example.COM " });
+    expect(parsed.email).toBe("some.one@example.com");
+    expect(parsed.locale).toBe("en");
+    expect(parsed.source).toBe("subscribe_page");
+  });
+
+  it("rejects bad emails, unknown locales and untidy sources", () => {
+    expect(SubscribeInputSchema.safeParse({ email: "nope" }).success).toBe(false);
+    expect(SubscribeInputSchema.safeParse({ email: "a@b.co", locale: "fr" }).success).toBe(false);
+    expect(SubscribeInputSchema.safeParse({ email: "a@b.co", source: "Has Spaces!" }).success).toBe(
+      false,
+    );
+  });
+
+  it("accepts the honeypot field (the route ignores any value in it)", () => {
+    expect(
+      SubscribeInputSchema.safeParse({ email: "a@b.co", website: "http://spam" }).success,
+    ).toBe(true);
   });
 });

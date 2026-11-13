@@ -3,6 +3,7 @@ import nodemailer, { type Transporter } from "nodemailer";
 import { config } from "../config";
 import { KITCHEN_LOCATION } from "../data";
 import { onOrderCreated } from "./orderEvents";
+import { buildSubscriptionEmail, type EmailLocale } from "./subscriptionEmails";
 import { totalCents, type OrderRecord } from "./orders";
 import type { OrdersRepository } from "./ordersRepository";
 
@@ -250,53 +251,97 @@ export function registerEmailNotifications(repository: OrdersRepository): void {
   });
 }
 
+function smtpConfigured(): boolean {
+  return !!(config.hostingerSmtpHost && config.hostingerSmtpUser && config.hostingerSmtpPass);
+}
+
+/** The unsubscribe page (human, one extra click) and the one-click endpoint
+ * (mail clients' native "Unsubscribe" button, RFC 8058) for a subscriber. */
+export function unsubscribeLinks(token: string, locale: EmailLocale) {
+  const prefix = locale === "de" ? "/de" : "";
+  return {
+    page: `${config.publicSiteUrl}${prefix}/subscribe/?unsubscribe=${encodeURIComponent(token)}`,
+    oneClick: `${config.publicApiUrl}/v1/subscribe/unsubscribe/one-click?token=${encodeURIComponent(token)}`,
+  };
+}
+
+async function sendSubscriptionMail(
+  to: string,
+  message: { subject: string; text: string; html: string },
+  extraHeaders: Record<string, string> = {},
+): Promise<void> {
+  await getTransporter().sendMail({
+    from: `"Dhaka Kacchi Berlin" <${config.subscribeFromEmail}>`,
+    replyTo: config.subscribeFromEmail,
+    to,
+    subject: message.subject,
+    text: message.text,
+    html: message.html,
+    headers: extraHeaders,
+  });
+}
+
 /**
- * The double opt-in email for the newsletter: nothing is sent to a subscriber
- * until they click this. Like sendPasswordResetEmail it logs the link instead
- * of failing when SMTP isn't configured, so the flow is testable locally.
+ * The double opt-in email: nothing is sent to a subscriber until they click
+ * its link. Like sendPasswordResetEmail it logs the link instead of failing
+ * when SMTP isn't configured, so the flow is testable locally.
  */
 export async function sendSubscriptionConfirmationEmail(
   email: string,
   confirmUrl: string,
-  locale: "en" | "de",
+  locale: EmailLocale,
 ): Promise<boolean> {
-  const de = locale === "de";
-  if (!config.hostingerSmtpHost || !config.hostingerSmtpUser || !config.hostingerSmtpPass) {
+  if (!smtpConfigured()) {
     console.log(
       `[dev] HOSTINGER_SMTP_* not configured - subscription link for ${email}: ${confirmUrl}`,
     );
     return true;
   }
+  await sendSubscriptionMail(
+    email,
+    buildSubscriptionEmail({
+      kind: "confirm",
+      locale,
+      actionUrl: confirmUrl,
+      logoUrl: `${config.publicSiteUrl}/email-logo.png`,
+      siteUrl: config.publicSiteUrl,
+      contactEmail: config.subscribeFromEmail,
+    }),
+  );
+  return true;
+}
 
-  await getTransporter().sendMail({
-    from: `"Dhaka Kacchi Berlin" <${config.orderFromEmail}>`,
-    to: email,
-    subject: de
-      ? "Bitte bestätigen Sie Ihre Anmeldung — Dhaka Kacchi Berlin"
-      : "Please confirm your subscription — Dhaka Kacchi Berlin",
-    text: (de
-      ? [
-          "Hallo,",
-          "",
-          "jemand hat diese E-Mail-Adresse für Neuigkeiten zur nächsten Charge von Dhaka Kacchi Berlin angemeldet. Bitte bestätigen Sie die Anmeldung mit diesem Link:",
-          confirmUrl,
-          "",
-          "Der Link ist 7 Tage gültig. Wenn Sie sich nicht angemeldet haben, ignorieren Sie diese E-Mail einfach — Sie erhalten dann nichts von uns.",
-          "",
-          "Dhaka Kacchi Berlin",
-        ]
-      : [
-          "Hi,",
-          "",
-          "Someone signed this email address up for news about the next Dhaka Kacchi Berlin batch. Please confirm with this link:",
-          confirmUrl,
-          "",
-          "The link is valid for 7 days. If you didn't sign up, just ignore this email — you won't hear from us.",
-          "",
-          "Dhaka Kacchi Berlin",
-        ]
-    ).join("\n"),
-  });
-
+/** Sent once, right after the confirmation click. Carries the unsubscribe link
+ * both in the footer and as List-Unsubscribe headers, so Gmail/Apple Mail show
+ * their own one-tap "Unsubscribe" - which also keeps this mail out of spam. */
+export async function sendSubscriptionWelcomeEmail(
+  email: string,
+  unsubscribeToken: string,
+  locale: EmailLocale,
+): Promise<boolean> {
+  const links = unsubscribeLinks(unsubscribeToken, locale);
+  if (!smtpConfigured()) {
+    console.log(
+      `[dev] HOSTINGER_SMTP_* not configured - welcome email for ${email}; unsubscribe: ${links.page}`,
+    );
+    return true;
+  }
+  const prefix = locale === "de" ? "/de" : "";
+  await sendSubscriptionMail(
+    email,
+    buildSubscriptionEmail({
+      kind: "welcome",
+      locale,
+      actionUrl: `${config.publicSiteUrl}${prefix}/order/`,
+      unsubscribeUrl: links.page,
+      logoUrl: `${config.publicSiteUrl}/email-logo.png`,
+      siteUrl: config.publicSiteUrl,
+      contactEmail: config.subscribeFromEmail,
+    }),
+    {
+      "List-Unsubscribe": `<${links.oneClick}>, <mailto:${config.subscribeFromEmail}?subject=unsubscribe>`,
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    },
+  );
   return true;
 }

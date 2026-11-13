@@ -106,6 +106,13 @@ export async function buildLogo() {
     .webp({ quality: 92, alphaQuality: 100, effort: 6 })
     .toFile(path.join(PHOTOS_DIR, "logo.webp"));
 
+  // The newsletter email header: same lockup as a PNG (email clients still
+  // handle PNG more reliably than WebP), 440 px wide, shown at 220 for retina.
+  await sharp(lockup)
+    .resize({ width: 440 })
+    .png({ compressionLevel: 9, palette: true, quality: 85 })
+    .toFile(path.join(PUBLIC_DIR, "email-logo.png"));
+
   // 2. The icon: just the pot and steam (the wordmark is unreadable at 16 px).
   // The pot is the left-hand block of the lockup, left of the "D".
   const potRight = Math.round(bbox.minX + (bbox.maxX - bbox.minX) * 0.2);

@@ -46,6 +46,7 @@ import {
   sendOtpEmail,
   sendPasswordResetEmail,
   sendSubscriptionConfirmationEmail,
+  sendSubscriptionWelcomeEmail,
 } from "./lib/email";
 import { emitOrderCreated } from "./lib/orderEvents";
 import { createPostgresEventsRepository } from "./lib/eventsRepository";
@@ -120,6 +121,8 @@ import {
   VerifyOtpInputSchema,
   SubscribeInputSchema,
   SubscribeConfirmInputSchema,
+  UnsubscribeInputSchema,
+  AdminSubscribersResultSchema,
   OkResultSchema,
 } from "./schemas";
 
@@ -1094,6 +1097,7 @@ v1Admin.use("/reporting", requireAdminAuth(adminSessionsRepository));
 v1Admin.use("/reporting/*", requireAdminAuth(adminSessionsRepository));
 v1Admin.use("/links", requireAdminAuth(adminSessionsRepository));
 v1Admin.use("/links/*", requireAdminAuth(adminSessionsRepository));
+v1Admin.use("/subscribers", requireAdminAuth(adminSessionsRepository));
 v1Admin.use("/cockpit", requireAdminAuth(adminSessionsRepository));
 v1Admin.use("/cockpit/*", requireAdminAuth(adminSessionsRepository));
 v1Admin.use("/post-predict", requireAdminAuth(adminSessionsRepository));
@@ -2214,7 +2218,12 @@ const subscribeRoute = createRoute({
   },
 });
 v1.openapi(subscribeRoute, async (c) => {
-  const { email, locale } = c.req.valid("json");
+  const { email, locale, source, website } = c.req.valid("json");
+  const ok = c.json({ ok: true as const }, 200);
+
+  // Honeypot filled in: pretend it worked, do nothing.
+  if (website) return ok;
+
   const ipAddress = clientIp(c);
   if (ipAddress && !subscribeLimiter.allow(ipAddress)) {
     return c.json(
@@ -2229,13 +2238,16 @@ v1.openapi(subscribeRoute, async (c) => {
     createdAt: new Date().toISOString(),
     email,
     locale,
+    source,
     tokenHash: hashToken(token),
     expiresAt: new Date(Date.now() + SUBSCRIBE_CONFIRM_TTL_DAYS * 24 * 60 * 60_000),
   });
 
-  // An address that already confirmed gets no email and the same answer, so
-  // this endpoint can't be used to find out who is on the list.
-  if (outcome !== "already_confirmed") {
+  // Only a new or genuinely re-armed sign-up sends mail. An already-confirmed
+  // address, or one asked for again within the throttle window, gets no email
+  // and the SAME answer - so the endpoint can't reveal who is on the list, and
+  // can't be used to flood one inbox.
+  if (outcome.kind === "created" || outcome.kind === "refreshed") {
     const prefix = locale === "de" ? "/de" : "";
     const confirmUrl = `${config.publicSiteUrl}${prefix}/subscribe/?confirm=${encodeURIComponent(token)}`;
     await sendSubscriptionConfirmationEmail(email, confirmUrl, locale).catch((err) => {
@@ -2243,7 +2255,7 @@ v1.openapi(subscribeRoute, async (c) => {
       console.error("sendSubscriptionConfirmationEmail failed:", err);
     });
   }
-  return c.json({ ok: true as const }, 200);
+  return ok;
 });
 
 const subscribeConfirmRoute = createRoute({
@@ -2281,7 +2293,74 @@ v1.openapi(subscribeConfirmRoute, async (c) => {
       400,
     );
   }
+  // The welcome email must never fail the confirmation itself.
+  await sendSubscriptionWelcomeEmail(
+    confirmed.email,
+    confirmed.unsubscribeToken,
+    confirmed.locale === "de" ? "de" : "en",
+  ).catch((err) => {
+    Sentry.captureException(err);
+    console.error("sendSubscriptionWelcomeEmail failed:", err);
+  });
   return c.json({ ok: true as const }, 200);
+});
+
+const unsubscribeRoute = createRoute({
+  method: "post",
+  path: "/subscribe/unsubscribe",
+  operationId: "unsubscribe",
+  summary: "Unsubscribe using the token from the link in a newsletter email",
+  security: [], // the token in the emailed link IS the credential
+  request: {
+    body: { content: { "application/json": { schema: UnsubscribeInputSchema } }, required: true },
+  },
+  responses: {
+    200: {
+      content: { "application/json": { schema: OkResultSchema } },
+      description: "Unsubscribed (repeating the call is harmless).",
+    },
+    400: {
+      content: { "application/json": { schema: ErrorResponseSchema } },
+      description: "The link is not valid.",
+    },
+  },
+});
+v1.openapi(unsubscribeRoute, async (c) => {
+  const { token } = c.req.valid("json");
+  const found = await subscribersRepository.unsubscribeByToken(token);
+  if (!found) {
+    return c.json({ error: "invalid_token", message: "This unsubscribe link is not valid." }, 400);
+  }
+  return c.json({ ok: true as const }, 200);
+});
+
+// RFC 8058 one-click unsubscribe: Gmail and Apple Mail POST here directly from
+// their own "Unsubscribe" button (the URL is in the List-Unsubscribe header),
+// with a form body and the token in the query string - not the JSON the page
+// above sends. Plain Hono route, so it isn't in the OpenAPI document.
+v1.post("/subscribe/unsubscribe/one-click", async (c) => {
+  const token = c.req.query("token") ?? "";
+  if (token.length >= 20 && token.length <= 200) {
+    await subscribersRepository.unsubscribeByToken(token);
+  }
+  return c.body(null, 200);
+});
+
+const adminSubscribersRoute = createRoute({
+  method: "get",
+  path: "/subscribers",
+  operationId: "adminSubscribers",
+  summary: "Newsletter subscribers: counts per status and the most recent sign-ups",
+  security: [{ adminBearerAuth: [] }],
+  responses: {
+    200: {
+      content: { "application/json": { schema: AdminSubscribersResultSchema } },
+      description: "Counts and up to 5000 most recent subscribers.",
+    },
+  },
+});
+v1Admin.openapi(adminSubscribersRoute, async (c) => {
+  return c.json(await subscribersRepository.list(5000), 200);
 });
 
 app.route("/v1", v1);
@@ -2298,5 +2377,19 @@ app.doc("/v1/doc", {
     { url: "http://localhost:8787/v1", description: "Local development" },
   ],
 });
+
+/** Idempotent startup work. Creating the subscribers table here (rather than
+ * needing a hand-run migration) means the feature works the moment this build
+ * is deployed. Every statement is IF NOT EXISTS, so it cannot touch data, and
+ * a failure is logged instead of stopping the API - ordering must keep working
+ * even if the newsletter table can't be created. */
+export async function runStartupMigrations(): Promise<void> {
+  try {
+    await subscribersRepository.ensureSchema();
+  } catch (err) {
+    Sentry.captureException(err);
+    console.error("Could not ensure the subscribers table (newsletter sign-up will fail):", err);
+  }
+}
 
 export default app;

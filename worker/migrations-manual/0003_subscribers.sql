@@ -5,6 +5,10 @@
 -- NEVER apply this via `npm run db:migrate` - see 0001's header and this
 -- directory's README for why. Additive and safe to re-run.
 --
+-- NOTE: the API now creates and upgrades this table by itself at startup
+-- (subscribersRepository.ensureSchema), so running this file by hand is optional -
+-- it is kept as the reference and for databases where ordering_app cannot CREATE.
+--
 -- Adds `subscribers`: the website's "get notified about the next batch"
 -- newsletter list, fed by POST /v1/subscribe. Double opt-in (the standard in
 -- Germany, and what UWG §7 expects): a row starts 'pending' and only becomes
@@ -22,11 +26,17 @@ CREATE TABLE IF NOT EXISTS subscribers (
   created_at          TEXT NOT NULL,              -- ISO 8601 UTC
   email               TEXT NOT NULL,              -- lowercased
   locale              TEXT NOT NULL DEFAULT 'en',
-  status              TEXT NOT NULL DEFAULT 'pending',  -- pending | confirmed
+  status              TEXT NOT NULL DEFAULT 'pending',  -- pending | confirmed | unsubscribed
   confirm_token_hash  TEXT,
   confirm_expires_at  TIMESTAMPTZ,
   confirmed_at        TIMESTAMPTZ
 );
+ALTER TABLE subscribers ADD COLUMN IF NOT EXISTS source TEXT;
+ALTER TABLE subscribers ADD COLUMN IF NOT EXISTS unsubscribe_token TEXT
+  NOT NULL DEFAULT replace(gen_random_uuid()::text, '-', '');
+ALTER TABLE subscribers ADD COLUMN IF NOT EXISTS unsubscribed_at TIMESTAMPTZ;
+ALTER TABLE subscribers ADD COLUMN IF NOT EXISTS last_confirmation_sent_at TIMESTAMPTZ;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_subscribers_unsubscribe_token ON subscribers(unsubscribe_token);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_subscribers_email ON subscribers(email);
 CREATE INDEX IF NOT EXISTS idx_subscribers_confirm_token_hash ON subscribers(confirm_token_hash);
 

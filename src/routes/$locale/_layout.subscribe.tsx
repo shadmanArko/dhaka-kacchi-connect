@@ -6,11 +6,13 @@ import { pageHead } from "@/lib/seo";
 export const Route = createFileRoute("/$locale/_layout/subscribe")({
   validateSearch: (search: Record<string, unknown>) => ({
     confirm: typeof search.confirm === "string" ? search.confirm : undefined,
+    unsubscribe: typeof search.unsubscribe === "string" ? search.unsubscribe : undefined,
   }),
   head: ({ params }) => pageHead("/subscribe", params.locale as Locale, "seo.subscribe"),
   component: SubscribeRoute,
 });
 
 function SubscribeRoute() {
-  return <SubscribePage confirmToken={Route.useSearch().confirm} />;
+  const { confirm, unsubscribe } = Route.useSearch();
+  return <SubscribePage confirmToken={confirm} unsubscribeToken={unsubscribe} />;
 }

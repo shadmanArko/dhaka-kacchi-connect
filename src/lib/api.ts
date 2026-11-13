@@ -621,15 +621,25 @@ const ORDER_TIMEOUT_MS = 60_000;
 
 export const api = {
   // Double opt-in: this only starts a sign-up (the server emails a link);
-  // confirmSubscription completes it from the link.
-  subscribe: (email: string, locale: string) =>
+  // confirmSubscription completes it from the link, and unsubscribe is the
+  // one-click opt-out from any later email. `website` is the honeypot field -
+  // always empty for a real visitor.
+  subscribe: (email: string, locale: string, website = "") =>
     apiFetch<{ ok: true }>(
       "/v1/subscribe",
-      { method: "POST", body: JSON.stringify({ email, locale }) },
+      {
+        method: "POST",
+        body: JSON.stringify({ email, locale, website, source: "subscribe_page" }),
+      },
       { timeoutMs: SIDE_EFFECT_TIMEOUT_MS }, // awaits the confirmation email
     ),
   confirmSubscription: (token: string) =>
     apiFetch<{ ok: true }>("/v1/subscribe/confirm", {
+      method: "POST",
+      body: JSON.stringify({ token }),
+    }),
+  unsubscribe: (token: string) =>
+    apiFetch<{ ok: true }>("/v1/subscribe/unsubscribe", {
       method: "POST",
       body: JSON.stringify({ token }),
     }),
@@ -714,7 +724,24 @@ export const api = {
     apiFetch<{ id: string }>("/v1/events", { method: "POST", body: JSON.stringify(input) }),
 };
 
+export type AdminSubscriber = {
+  id: string;
+  email: string;
+  locale: string;
+  status: "pending" | "confirmed" | "unsubscribed";
+  source: string | null;
+  createdAt: string;
+  confirmedAt: string | null;
+  unsubscribedAt: string | null;
+};
+export type AdminSubscribersResult = {
+  counts: { pending: number; confirmed: number; unsubscribed: number };
+  subscribers: AdminSubscriber[];
+};
+
 export const adminApi = {
+  listSubscribers: (token: string) =>
+    apiFetch<AdminSubscribersResult>("/v1/admin/subscribers", { headers: authHeader(token) }),
   login: (input: { email: string; password: string }) =>
     apiFetch<AdminAuthResult>("/v1/admin/login", {
       method: "POST",

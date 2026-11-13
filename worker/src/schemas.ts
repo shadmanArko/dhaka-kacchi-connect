@@ -866,8 +866,41 @@ export const SubscribeInputSchema = z
   .object({
     email: z.string().trim().toLowerCase().email("Please enter a valid email address.").max(254),
     locale: z.enum(["en", "de"]).default("en"),
+    // Which form the sign-up came from, for knowing what works. Free-form but
+    // short and tidy so it can't be used to stuff junk into the table.
+    source: z
+      .string()
+      .trim()
+      .max(40)
+      .regex(/^[a-z0-9_-]*$/)
+      .default("subscribe_page"),
+    // Honeypot: a hidden field real visitors never fill. A bot that does gets
+    // the normal "ok" answer and nothing is stored or sent.
+    website: z.string().max(200).optional(),
   })
   .openapi("SubscribeInput");
+
+export const UnsubscribeInputSchema = z
+  .object({ token: z.string().min(20).max(200) })
+  .openapi("UnsubscribeInput");
+
+export const AdminSubscribersResultSchema = z
+  .object({
+    counts: z.object({ pending: z.number(), confirmed: z.number(), unsubscribed: z.number() }),
+    subscribers: z.array(
+      z.object({
+        id: z.string(),
+        email: z.string(),
+        locale: z.string(),
+        status: z.enum(["pending", "confirmed", "unsubscribed"]),
+        source: z.string().nullable(),
+        createdAt: z.string(),
+        confirmedAt: z.string().nullable(),
+        unsubscribedAt: z.string().nullable(),
+      }),
+    ),
+  })
+  .openapi("AdminSubscribersResult");
 
 export const SubscribeConfirmInputSchema = z
   .object({ token: z.string().min(20).max(200) })

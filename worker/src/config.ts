@@ -21,6 +21,14 @@ export type AppConfig = {
   readonly databaseUrl: string;
   readonly allowedOrigins: readonly string[];
   readonly orderFromEmail: string;
+  // The address newsletter mails (sign-up confirmation, welcome) come from and
+  // where replies go. hello@ is the real mailbox on the Hostinger plan, so it
+  // is always an allowed sender. Optional - defaults to hello@dhakakacchi.com.
+  readonly subscribeFromEmail: string;
+  // Public base URL of THIS API, used for the one-click unsubscribe URL that
+  // goes in the List-Unsubscribe mail header. Derived from PUBLIC_SITE_URL when
+  // unset (https://dhakakacchi.com -> https://api.dhakakacchi.com).
+  readonly publicApiUrl: string;
   // The site's own public URL, used only to build the link inside a
   // password-reset email (e.g. `${publicSiteUrl}/reset-password?token=...`).
   // Defaults to the frontend's local dev origin so this never blocks local
@@ -93,6 +101,26 @@ function optional(env: NodeJS.ProcessEnv, name: string): string | undefined {
   return env[name]?.trim() || undefined;
 }
 
+/** The API's own public URL: PUBLIC_API_URL if set, otherwise guessed from the
+ * site URL ("https://dhakakacchi.com" -> "https://api.dhakakacchi.com"), or the
+ * local port in dev. Exported for tests. */
+export function derivePublicApiUrl(
+  explicit: string | undefined,
+  siteUrl: string,
+  port: number,
+): string {
+  if (explicit) return explicit.replace(/\/+$/, "");
+  try {
+    const url = new URL(siteUrl);
+    if (url.hostname === "localhost" || url.hostname === "127.0.0.1") {
+      return `http://localhost:${port}`;
+    }
+    return `${url.protocol}//api.${url.hostname.replace(/^www\./, "")}`;
+  } catch {
+    return `http://localhost:${port}`;
+  }
+}
+
 /** Builds and validates an AppConfig from a given env map. Exported (and
  * pure) so it's independently testable without touching process.env. */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -112,13 +140,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   }
 
   const smtpPortRaw = optional(env, "HOSTINGER_SMTP_PORT");
+  const siteUrl = optional(env, "PUBLIC_SITE_URL") ?? "http://localhost:8080";
 
   return Object.freeze({
     port,
     databaseUrl,
     allowedOrigins,
     orderFromEmail: required(env, "ORDER_FROM_EMAIL"),
-    publicSiteUrl: optional(env, "PUBLIC_SITE_URL") ?? "http://localhost:8080",
+    subscribeFromEmail: optional(env, "SUBSCRIBE_FROM_EMAIL") ?? "hello@dhakakacchi.com",
+    publicApiUrl: derivePublicApiUrl(optional(env, "PUBLIC_API_URL"), siteUrl, port),
+    publicSiteUrl: siteUrl,
     hostingerSmtpHost: optional(env, "HOSTINGER_SMTP_HOST"),
     hostingerSmtpPort: smtpPortRaw ? Number(smtpPortRaw) : undefined,
     hostingerSmtpUser: optional(env, "HOSTINGER_SMTP_USER"),

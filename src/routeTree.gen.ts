@@ -22,6 +22,7 @@ import { Route as AdminLayoutRouteImport } from './routes/admin/_layout'
 import { Route as LocaleLayoutRouteImport } from './routes/$locale/_layout'
 import { Route as AdminLayoutIndexRouteImport } from './routes/admin/_layout.index'
 import { Route as LocaleLayoutIndexRouteImport } from './routes/$locale/_layout.index'
+import { Route as AdminLayoutSubscribersRouteImport } from './routes/admin/_layout.subscribers'
 import { Route as AdminLayoutReportingRouteImport } from './routes/admin/_layout.reporting'
 import { Route as AdminLayoutPostPredictRouteImport } from './routes/admin/_layout.post-predict'
 import { Route as AdminLayoutLoginRouteImport } from './routes/admin/_layout.login'
@@ -101,6 +102,11 @@ const LocaleLayoutIndexRoute = LocaleLayoutIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => LocaleLayoutRoute,
+} as any)
+const AdminLayoutSubscribersRoute = AdminLayoutSubscribersRouteImport.update({
+  id: '/subscribers',
+  path: '/subscribers',
+  getParentRoute: () => AdminLayoutRoute,
 } as any)
 const AdminLayoutReportingRoute = AdminLayoutReportingRouteImport.update({
   id: '/reporting',
@@ -199,6 +205,7 @@ export interface FileRoutesByFullPath {
   '/admin/login': typeof AdminLayoutLoginRoute
   '/admin/post-predict': typeof AdminLayoutPostPredictRoute
   '/admin/reporting': typeof AdminLayoutReportingRoute
+  '/admin/subscribers': typeof AdminLayoutSubscribersRoute
   '/$locale/': typeof LocaleLayoutIndexRoute
   '/admin/': typeof AdminLayoutIndexRoute
   '/admin/orders/new': typeof AdminLayoutOrdersNewRoute
@@ -226,6 +233,7 @@ export interface FileRoutesByTo {
   '/admin/login': typeof AdminLayoutLoginRoute
   '/admin/post-predict': typeof AdminLayoutPostPredictRoute
   '/admin/reporting': typeof AdminLayoutReportingRoute
+  '/admin/subscribers': typeof AdminLayoutSubscribersRoute
   '/$locale': typeof LocaleLayoutIndexRoute
   '/admin': typeof AdminLayoutIndexRoute
   '/admin/orders/new': typeof AdminLayoutOrdersNewRoute
@@ -256,6 +264,7 @@ export interface FileRoutesById {
   '/admin/_layout/login': typeof AdminLayoutLoginRoute
   '/admin/_layout/post-predict': typeof AdminLayoutPostPredictRoute
   '/admin/_layout/reporting': typeof AdminLayoutReportingRoute
+  '/admin/_layout/subscribers': typeof AdminLayoutSubscribersRoute
   '/$locale/_layout/': typeof LocaleLayoutIndexRoute
   '/admin/_layout/': typeof AdminLayoutIndexRoute
   '/admin/_layout/orders/new': typeof AdminLayoutOrdersNewRoute
@@ -287,6 +296,7 @@ export interface FileRouteTypes {
     | '/admin/login'
     | '/admin/post-predict'
     | '/admin/reporting'
+    | '/admin/subscribers'
     | '/$locale/'
     | '/admin/'
     | '/admin/orders/new'
@@ -314,6 +324,7 @@ export interface FileRouteTypes {
     | '/admin/login'
     | '/admin/post-predict'
     | '/admin/reporting'
+    | '/admin/subscribers'
     | '/$locale'
     | '/admin'
     | '/admin/orders/new'
@@ -343,6 +354,7 @@ export interface FileRouteTypes {
     | '/admin/_layout/login'
     | '/admin/_layout/post-predict'
     | '/admin/_layout/reporting'
+    | '/admin/_layout/subscribers'
     | '/$locale/_layout/'
     | '/admin/_layout/'
     | '/admin/_layout/orders/new'
@@ -454,6 +466,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/$locale/'
       preLoaderRoute: typeof LocaleLayoutIndexRouteImport
       parentRoute: typeof LocaleLayoutRoute
+    }
+    '/admin/_layout/subscribers': {
+      id: '/admin/_layout/subscribers'
+      path: '/subscribers'
+      fullPath: '/admin/subscribers'
+      preLoaderRoute: typeof AdminLayoutSubscribersRouteImport
+      parentRoute: typeof AdminLayoutRoute
     }
     '/admin/_layout/reporting': {
       id: '/admin/_layout/reporting'
@@ -590,6 +609,7 @@ interface AdminLayoutRouteChildren {
   AdminLayoutLoginRoute: typeof AdminLayoutLoginRoute
   AdminLayoutPostPredictRoute: typeof AdminLayoutPostPredictRoute
   AdminLayoutReportingRoute: typeof AdminLayoutReportingRoute
+  AdminLayoutSubscribersRoute: typeof AdminLayoutSubscribersRoute
   AdminLayoutIndexRoute: typeof AdminLayoutIndexRoute
   AdminLayoutOrdersNewRoute: typeof AdminLayoutOrdersNewRoute
 }
@@ -600,6 +620,7 @@ const AdminLayoutRouteChildren: AdminLayoutRouteChildren = {
   AdminLayoutLoginRoute: AdminLayoutLoginRoute,
   AdminLayoutPostPredictRoute: AdminLayoutPostPredictRoute,
   AdminLayoutReportingRoute: AdminLayoutReportingRoute,
+  AdminLayoutSubscribersRoute: AdminLayoutSubscribersRoute,
   AdminLayoutIndexRoute: AdminLayoutIndexRoute,
   AdminLayoutOrdersNewRoute: AdminLayoutOrdersNewRoute,
 }
