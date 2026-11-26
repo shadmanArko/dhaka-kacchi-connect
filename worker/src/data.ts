@@ -12,13 +12,13 @@ export const MENU: MenuItem[] = [
     sku: "kacchi_taster",
     name: "Kacchi Biriyani — Taster Box (750ml)",
     priceCents: 999,
-    description: "1 piece of lamb, 1 whole potato, fresh salad.",
+    description: "1 piece of mutton, 1 whole potato, fresh salad.",
   },
   {
     sku: "kacchi_regular",
     name: "Kacchi Biriyani — Regular Box (1000ml)",
     priceCents: 1500,
-    description: "2 pieces of lamb, 1 whole potato, fresh salad, homemade chutney.",
+    description: "2 pieces of mutton, 1 whole potato, fresh salad, homemade chutney.",
   },
   {
     sku: "borhani",
